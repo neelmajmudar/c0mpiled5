@@ -1,486 +1,559 @@
-// ============================================================
-// STATE
-// ============================================================
+// ========================================
+// MOLLITIAM - SIDEPANEL CONTROLLER
+// ========================================
 
+// State
 let settings = {
-    apiChoice: 'summarization',
-    customPrompt: 'Summarize this article in 2-3 sentences',
-    displayMode: 'tooltip',
-    gazeEnabled: false,
-    gazeDwellMs: 600,
-    simplificationLevel: '3',
-    optimizeFor: 'textClarity',
-    selectedTheme: 'default',
-    fontEnabled: false,
-    hoverEnabled: false,
-    lineSpacing: 1.5,
-    letterSpacing: 0,
-    wordSpacing: 0
+  apiChoice: 'summarization',
+  customPrompt: 'Summarize this article in 2-3 sentences',
+  displayMode: 'tooltip',
+  gazeEnabled: false,
+  gazeDwellMs: 600,
+  simplificationLevel: '3',
+  optimizeFor: 'textClarity',
+  selectedTheme: 'default',
+  fontEnabled: false,
+  hoverEnabled: false,
+  lineSpacing: 1.5,
+  letterSpacing: 0,
+  wordSpacing: 0
 };
 
-let elements = {};
+let currentContent = { title: '', fullContent: '', summary: '' };
+const elements = {};
 
-// ============================================================
-// INITIALIZATION
-// ============================================================
+// ============ Initialization ============
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[Mollitiam] Sidepanel DOMContentLoaded');
+  
+  try {
+    // Get all DOM elements
     cacheElements();
-    loadSettings();
+    await loadSettings();
     setupTabNavigation();
     setupEventListeners();
     showWelcome();
-
-    // Query API status
-    chrome.runtime.sendMessage({ type: 'GET_API_STATUS' }, (response) => {
-        if (chrome.runtime.lastError) return;
-        // Could update UI with API status indicators here
-    });
+    
+    try {
+      const status = await chrome.runtime.sendMessage({ type: 'GET_API_STATUS' });
+      console.log('[Mollitiam] API status:', status);
+    } catch (e) {
+      console.error('[Mollitiam] Failed to get API status:', e);
+    }
+    
+    console.log('[Mollitiam] Sidepanel initialization complete');
+  } catch (error) {
+    console.error('[Mollitiam] Sidepanel initialization error:', error);
+  }
 });
 
 function cacheElements() {
-    elements = {
-        // Tabs
-        tabBtns: document.querySelectorAll('.tab-btn'),
-        tabContents: document.querySelectorAll('.tab-content'),
+  // Summary tab
+  elements.welcome = document.getElementById('welcome');
+  elements.loadingExtract = document.getElementById('loading-extract');
+  elements.loadingSummarize = document.getElementById('loading-summarize');
+  elements.contentArea = document.getElementById('content-area');
+  elements.error = document.getElementById('error');
+  elements.title = document.getElementById('title');
+  elements.aiSummary = document.getElementById('ai-summary');
+  elements.articleContent = document.getElementById('article-content');
+  elements.toggleBtn = document.getElementById('toggle-full-content');
+  elements.fullContentSection = document.getElementById('full-content-section');
+  
+  // AI Settings
+  elements.radioSummarization = document.getElementById('radio-summarization');
+  elements.radioPrompt = document.getElementById('radio-prompt');
+  elements.customPrompt = document.getElementById('custom-prompt');
+  elements.promptContainer = document.getElementById('prompt-container');
+  elements.displayMode = document.getElementById('display-mode');
 
-        // Accessibility
-        levelBtns: document.querySelectorAll('.level-btn'),
-        optimizeMode: document.getElementById('optimize-mode'),
-        simplifyBtn: document.getElementById('simplify-btn'),
-        fontToggle: document.getElementById('font-toggle'),
-        hoverToggle: document.getElementById('hover-toggle'),
-        themeSelect: document.getElementById('theme-select'),
-        lineSpacing: document.getElementById('line-spacing'),
-        letterSpacing: document.getElementById('letter-spacing'),
-        wordSpacing: document.getElementById('word-spacing'),
-        lineSpacingValue: document.getElementById('line-spacing-value'),
-        letterSpacingValue: document.getElementById('letter-spacing-value'),
-        wordSpacingValue: document.getElementById('word-spacing-value'),
-        resetSpacingBtn: document.getElementById('reset-spacing-btn'),
+  // Accessibility
+  elements.simplifyBtn = document.getElementById('simplify-btn');
+  elements.optimizeMode = document.getElementById('optimize-mode');
+  elements.fontToggle = document.getElementById('font-toggle');
+  elements.hoverToggle = document.getElementById('hover-toggle');
+  elements.themeSelect = document.getElementById('theme-select');
+  elements.lineSpacing = document.getElementById('line-spacing');
+  elements.lineSpacingValue = document.getElementById('line-spacing-value');
+  elements.letterSpacing = document.getElementById('letter-spacing');
+  elements.letterSpacingValue = document.getElementById('letter-spacing-value');
+  elements.wordSpacing = document.getElementById('word-spacing');
+  elements.wordSpacingValue = document.getElementById('word-spacing-value');
+  elements.resetSpacing = document.getElementById('reset-spacing');
 
-        // AI Summary
-        displayMode: document.getElementById('display-mode'),
-        apiChoiceRadios: document.querySelectorAll('input[name="api-choice"]'),
-        customPrompt: document.getElementById('custom-prompt'),
-        promptContainer: document.getElementById('prompt-container'),
-        loadingState: document.getElementById('loading-state'),
-        loadingText: document.getElementById('loading-text'),
-        contentArea: document.getElementById('content-area'),
-        title: document.getElementById('title'),
-        aiSummary: document.getElementById('ai-summary'),
-        toggleContentBtn: document.getElementById('toggle-content-btn'),
-        fullContentSection: document.getElementById('full-content-section'),
-        articleContent: document.getElementById('article-content'),
-        fallbackArticle: document.getElementById('fallback-article'),
-        errorState: document.getElementById('error-state'),
-        errorMessage: document.getElementById('error-message'),
-        welcomeState: document.getElementById('welcome-state'),
+  // Gaze controls
+  elements.gazeEnabled = document.getElementById('gaze-enabled');
+  elements.gazeStatusDot = document.getElementById('gaze-status-dot');
+  elements.gazeStatusText = document.getElementById('gaze-status-text');
+  elements.calibrateBtn = document.getElementById('calibrate-btn');
+  elements.dwellTime = document.getElementById('dwell-time');
+  elements.dwellValue = document.getElementById('dwell-value');
 
-        // Tracking
-        gazeToggle: document.getElementById('gaze-toggle'),
-        gazeStatusDot: document.getElementById('gaze-status-dot'),
-        gazeStatusText: document.getElementById('gaze-status-text'),
-        calibrateBtn: document.getElementById('calibrate-btn'),
-        dwellTime: document.getElementById('dwell-time'),
-        dwellValue: document.getElementById('dwell-value'),
-        mouthToggle: document.getElementById('mouth-toggle'),
-        mouthStatusDot: document.getElementById('mouth-status-dot'),
-        mouthStatusText: document.getElementById('mouth-status-text'),
-        mouthCalibrateBtn: document.getElementById('mouth-calibrate-btn')
-    };
+  // Mouth click controls
+  elements.mouthClickEnabled = document.getElementById('mouth-click-enabled');
+  elements.mouthStatusDot = document.getElementById('mouth-status-dot');
+  elements.mouthStatusText = document.getElementById('mouth-status-text');
+  elements.calibrateMouthBtn = document.getElementById('calibrate-mouth-btn');
 }
 
-function loadSettings() {
-    // Load from chrome.storage.local
-    chrome.storage.local.get(
-        ['apiChoice', 'customPrompt', 'displayMode', 'gazeEnabled', 'gazeDwellMs', 'mouthClickEnabled'],
-        (result) => {
-            if (result.apiChoice) {
-                settings.apiChoice = result.apiChoice;
-                elements.apiChoiceRadios.forEach(r => {
-                    r.checked = r.value === settings.apiChoice;
-                });
-                togglePromptContainer();
-            }
-            if (result.customPrompt) {
-                settings.customPrompt = result.customPrompt;
-                elements.customPrompt.value = settings.customPrompt;
-            }
-            if (result.displayMode) {
-                settings.displayMode = result.displayMode;
-                elements.displayMode.value = settings.displayMode;
-            }
-            if (result.gazeEnabled !== undefined) {
-                settings.gazeEnabled = result.gazeEnabled;
-                elements.gazeToggle.checked = settings.gazeEnabled;
-                elements.calibrateBtn.disabled = !settings.gazeEnabled;
-                if (settings.gazeEnabled) updateGazeStatus('loading', 'Initializing...');
-            }
-            if (result.gazeDwellMs) {
-                settings.gazeDwellMs = result.gazeDwellMs;
-                elements.dwellTime.value = settings.gazeDwellMs;
-                elements.dwellValue.textContent = settings.gazeDwellMs + 'ms';
-            }
-            if (result.mouthClickEnabled) {
-                elements.mouthToggle.checked = true;
-                elements.mouthCalibrateBtn.disabled = false;
-            }
-        }
-    );
-
-    // Load from chrome.storage.sync
-    chrome.storage.sync.get(
-        ['simplificationLevel', 'optimizeFor', 'selectedTheme', 'fontEnabled',
-         'hoverEnabled', 'lineSpacing', 'letterSpacing', 'wordSpacing'],
-        (result) => {
-            if (result.simplificationLevel) {
-                settings.simplificationLevel = result.simplificationLevel;
-                elements.levelBtns.forEach(btn => {
-                    btn.classList.toggle('selected', btn.dataset.level === settings.simplificationLevel);
-                });
-            }
-            if (result.optimizeFor) {
-                settings.optimizeFor = result.optimizeFor;
-                elements.optimizeMode.value = settings.optimizeFor;
-            }
-            if (result.selectedTheme) {
-                settings.selectedTheme = result.selectedTheme;
-                elements.themeSelect.value = settings.selectedTheme;
-            }
-            if (result.fontEnabled !== undefined) {
-                settings.fontEnabled = result.fontEnabled;
-                elements.fontToggle.checked = settings.fontEnabled;
-            }
-            if (result.hoverEnabled !== undefined) {
-                settings.hoverEnabled = result.hoverEnabled;
-                elements.hoverToggle.checked = settings.hoverEnabled;
-            }
-            if (result.lineSpacing !== undefined) {
-                settings.lineSpacing = result.lineSpacing;
-                elements.lineSpacing.value = settings.lineSpacing;
-                elements.lineSpacingValue.textContent = settings.lineSpacing;
-            }
-            if (result.letterSpacing !== undefined) {
-                settings.letterSpacing = result.letterSpacing;
-                elements.letterSpacing.value = settings.letterSpacing;
-                elements.letterSpacingValue.textContent = settings.letterSpacing;
-            }
-            if (result.wordSpacing !== undefined) {
-                settings.wordSpacing = result.wordSpacing;
-                elements.wordSpacing.value = settings.wordSpacing;
-                elements.wordSpacingValue.textContent = settings.wordSpacing;
-            }
-        }
-    );
-}
-
-// ============================================================
-// TAB NAVIGATION
-// ============================================================
+// ============ Tab Navigation ============
 
 function setupTabNavigation() {
-    elements.tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabId = btn.dataset.tab;
-
-            elements.tabBtns.forEach(b => b.classList.remove('active'));
-            elements.tabContents.forEach(c => c.classList.remove('active'));
-
-            btn.classList.add('active');
-            document.getElementById(`tab-${tabId}`).classList.add('active');
-        });
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Deactivate all tabs
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Activate clicked tab
+      btn.classList.add('active');
+      const tabId = `tab-${btn.dataset.tab}`;
+      const tabContent = document.getElementById(tabId);
+      if (tabContent) tabContent.classList.add('active');
     });
+  });
 }
 
-// ============================================================
-// EVENT LISTENERS
-// ============================================================
+// ============ Settings ============
+
+async function loadSettings() {
+  const stored = await chrome.storage.local.get([
+    'apiChoice', 'customPrompt', 'displayMode', 'gazeEnabled', 'gazeDwellMs', 'mouthClickEnabled', 'mouthCalV1'
+  ]);
+  const syncStored = await chrome.storage.sync.get([
+    'simplificationLevel', 'optimizeFor', 'selectedTheme', 'fontEnabled', 'hoverEnabled',
+    'lineSpacing', 'letterSpacing', 'wordSpacing'
+  ]);
+
+  // Merge stored values
+  if (stored.apiChoice) settings.apiChoice = stored.apiChoice;
+  if (stored.customPrompt) settings.customPrompt = stored.customPrompt;
+  if (stored.displayMode) settings.displayMode = stored.displayMode;
+  if (typeof stored.gazeEnabled === 'boolean') settings.gazeEnabled = stored.gazeEnabled;
+  if (typeof stored.gazeDwellMs === 'number') settings.gazeDwellMs = stored.gazeDwellMs;
+  
+  if (syncStored.simplificationLevel) settings.simplificationLevel = syncStored.simplificationLevel;
+  if (syncStored.optimizeFor) settings.optimizeFor = syncStored.optimizeFor;
+  if (syncStored.selectedTheme) settings.selectedTheme = syncStored.selectedTheme;
+  if (typeof syncStored.fontEnabled === 'boolean') settings.fontEnabled = syncStored.fontEnabled;
+  if (typeof syncStored.hoverEnabled === 'boolean') settings.hoverEnabled = syncStored.hoverEnabled;
+  if (syncStored.lineSpacing) settings.lineSpacing = syncStored.lineSpacing;
+  if (typeof syncStored.letterSpacing === 'number') settings.letterSpacing = syncStored.letterSpacing;
+  if (typeof syncStored.wordSpacing === 'number') settings.wordSpacing = syncStored.wordSpacing;
+
+  // Update UI from settings
+  
+  // AI settings
+  if (elements.radioSummarization && elements.radioPrompt) {
+    if (settings.apiChoice === 'summarization') elements.radioSummarization.checked = true;
+    else elements.radioPrompt.checked = true;
+  }
+  if (elements.customPrompt) elements.customPrompt.value = settings.customPrompt;
+  if (elements.displayMode) elements.displayMode.value = settings.displayMode;
+  
+  // Accessibility
+  if (elements.optimizeMode) elements.optimizeMode.value = settings.optimizeFor;
+  if (elements.fontToggle) elements.fontToggle.checked = settings.fontEnabled;
+  if (elements.hoverToggle) elements.hoverToggle.checked = settings.hoverEnabled;
+  if (elements.themeSelect) elements.themeSelect.value = settings.selectedTheme;
+  
+  // Level buttons
+  document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.level === settings.simplificationLevel);
+  });
+  
+  // Spacing
+  if (elements.lineSpacing) { elements.lineSpacing.value = settings.lineSpacing; }
+  if (elements.lineSpacingValue) elements.lineSpacingValue.textContent = settings.lineSpacing;
+  if (elements.letterSpacing) { elements.letterSpacing.value = settings.letterSpacing; }
+  if (elements.letterSpacingValue) elements.letterSpacingValue.textContent = settings.letterSpacing;
+  if (elements.wordSpacing) { elements.wordSpacing.value = settings.wordSpacing; }
+  if (elements.wordSpacingValue) elements.wordSpacingValue.textContent = settings.wordSpacing;
+
+  // Gaze
+  if (elements.gazeEnabled) elements.gazeEnabled.checked = settings.gazeEnabled;
+  if (elements.dwellTime) elements.dwellTime.value = settings.gazeDwellMs;
+  if (elements.dwellValue) elements.dwellValue.textContent = settings.gazeDwellMs;
+  if (elements.calibrateBtn) elements.calibrateBtn.disabled = !settings.gazeEnabled;
+  if (!settings.gazeEnabled) updateGazeStatus('ready', 'Enable to start');
+
+  // Mouth click
+  const mouthEnabled = stored.mouthClickEnabled || false;
+  if (elements.mouthClickEnabled) elements.mouthClickEnabled.checked = mouthEnabled;
+  if (elements.calibrateMouthBtn) elements.calibrateMouthBtn.disabled = !mouthEnabled;
+  updateMouthStatus(!!stored.mouthCalV1);
+
+  togglePromptContainer();
+}
+
+async function saveLocalSettings() {
+  await chrome.storage.local.set({
+    apiChoice: settings.apiChoice,
+    customPrompt: settings.customPrompt,
+    displayMode: settings.displayMode,
+    gazeEnabled: settings.gazeEnabled,
+    gazeDwellMs: settings.gazeDwellMs
+  });
+}
+
+async function saveSyncSettings() {
+  await chrome.storage.sync.set({
+    simplificationLevel: settings.simplificationLevel,
+    optimizeFor: settings.optimizeFor,
+    selectedTheme: settings.selectedTheme,
+    fontEnabled: settings.fontEnabled,
+    hoverEnabled: settings.hoverEnabled,
+    lineSpacing: settings.lineSpacing,
+    letterSpacing: settings.letterSpacing,
+    wordSpacing: settings.wordSpacing
+  });
+}
+
+// ============ Event Listeners ============
 
 function setupEventListeners() {
-    // --- Level buttons ---
-    elements.levelBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            elements.levelBtns.forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            settings.simplificationLevel = btn.dataset.level;
-            chrome.storage.sync.set({ simplificationLevel: settings.simplificationLevel });
-        });
+  // --- Simplification ---
+  
+  // Level buttons
+  document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      settings.simplificationLevel = btn.dataset.level;
+      chrome.storage.sync.set({ simplificationLevel: settings.simplificationLevel });
     });
-
-    // --- Optimize mode ---
-    elements.optimizeMode.addEventListener('change', () => {
-        settings.optimizeFor = elements.optimizeMode.value;
-        chrome.storage.sync.set({ optimizeFor: settings.optimizeFor });
+  });
+  
+  // Optimize mode
+  if (elements.optimizeMode) {
+    elements.optimizeMode.addEventListener('change', (e) => {
+      settings.optimizeFor = e.target.value;
+      chrome.storage.sync.set({ optimizeFor: settings.optimizeFor });
     });
-
-    // --- Simplify button ---
-    elements.simplifyBtn.addEventListener('click', () => {
-        elements.simplifyBtn.disabled = true;
-        elements.simplifyBtn.textContent = 'Simplifying...';
-        chrome.runtime.sendMessage({ action: 'simplifyActiveTab' });
-        setTimeout(() => {
-            elements.simplifyBtn.disabled = false;
-            elements.simplifyBtn.innerHTML = '&#10024; Simplify Page Text';
-        }, 2000);
+  }
+  
+  // Simplify button
+  if (elements.simplifyBtn) {
+    elements.simplifyBtn.addEventListener('click', async () => {
+      elements.simplifyBtn.disabled = true;
+      elements.simplifyBtn.textContent = 'Simplifying...';
+      
+      try {
+        await chrome.runtime.sendMessage({ action: 'simplifyActiveTab' });
+      } catch (e) {
+        console.error('[Mollitiam] Simplify failed:', e);
+      }
+      
+      setTimeout(() => {
+        elements.simplifyBtn.disabled = false;
+        elements.simplifyBtn.textContent = 'Simplify Page Text';
+      }, 2000);
     });
-
-    // --- Font toggle ---
-    elements.fontToggle.addEventListener('change', () => {
-        settings.fontEnabled = elements.fontToggle.checked;
-        chrome.storage.sync.set({ fontEnabled: settings.fontEnabled });
-        relayToActiveTab({ action: 'toggleFont', enabled: settings.fontEnabled });
+  }
+  
+  // --- Visual Settings ---
+  
+  // Font toggle
+  if (elements.fontToggle) {
+    elements.fontToggle.addEventListener('change', (e) => {
+      settings.fontEnabled = e.target.checked;
+      chrome.storage.sync.set({ fontEnabled: settings.fontEnabled });
+      relayToActiveTab({ action: 'toggleFont', enabled: settings.fontEnabled });
     });
-
-    // --- Hover toggle ---
-    elements.hoverToggle.addEventListener('change', () => {
-        settings.hoverEnabled = elements.hoverToggle.checked;
-        chrome.storage.sync.set({ hoverEnabled: settings.hoverEnabled });
-        relayToActiveTab({ action: 'toggleHover', enabled: settings.hoverEnabled });
+  }
+  
+  // Hover toggle
+  if (elements.hoverToggle) {
+    elements.hoverToggle.addEventListener('change', (e) => {
+      settings.hoverEnabled = e.target.checked;
+      chrome.storage.sync.set({ hoverEnabled: settings.hoverEnabled });
+      relayToActiveTab({ action: 'toggleHover', enabled: settings.hoverEnabled });
     });
-
-    // --- Theme select ---
-    elements.themeSelect.addEventListener('change', () => {
-        settings.selectedTheme = elements.themeSelect.value;
-        chrome.storage.sync.set({ selectedTheme: settings.selectedTheme });
-        relayToActiveTab({ action: 'applyTheme', theme: settings.selectedTheme });
+  }
+  
+  // Theme select
+  if (elements.themeSelect) {
+    elements.themeSelect.addEventListener('change', (e) => {
+      settings.selectedTheme = e.target.value;
+      chrome.storage.sync.set({ selectedTheme: settings.selectedTheme });
+      relayToActiveTab({ action: 'applyTheme', theme: settings.selectedTheme });
     });
-
-    // --- Spacing sliders ---
-    elements.lineSpacing.addEventListener('input', () => {
-        elements.lineSpacingValue.textContent = elements.lineSpacing.value;
-        applySpacing();
+  }
+  
+  // --- Spacing ---
+  
+  if (elements.lineSpacing) {
+    elements.lineSpacing.addEventListener('input', (e) => {
+      settings.lineSpacing = parseFloat(e.target.value);
+      if (elements.lineSpacingValue) elements.lineSpacingValue.textContent = settings.lineSpacing;
+      applySpacing();
     });
-    elements.letterSpacing.addEventListener('input', () => {
-        elements.letterSpacingValue.textContent = elements.letterSpacing.value;
-        applySpacing();
+  }
+  
+  if (elements.letterSpacing) {
+    elements.letterSpacing.addEventListener('input', (e) => {
+      settings.letterSpacing = parseFloat(e.target.value);
+      if (elements.letterSpacingValue) elements.letterSpacingValue.textContent = settings.letterSpacing;
+      applySpacing();
     });
-    elements.wordSpacing.addEventListener('input', () => {
-        elements.wordSpacingValue.textContent = elements.wordSpacing.value;
-        applySpacing();
+  }
+  
+  if (elements.wordSpacing) {
+    elements.wordSpacing.addEventListener('input', (e) => {
+      settings.wordSpacing = parseInt(e.target.value, 10);
+      if (elements.wordSpacingValue) elements.wordSpacingValue.textContent = settings.wordSpacing;
+      applySpacing();
     });
-
-    // --- Reset spacing ---
-    elements.resetSpacingBtn.addEventListener('click', () => {
-        elements.lineSpacing.value = 1.5;
-        elements.letterSpacing.value = 0;
-        elements.wordSpacing.value = 0;
-        elements.lineSpacingValue.textContent = '1.5';
-        elements.letterSpacingValue.textContent = '0';
-        elements.wordSpacingValue.textContent = '0';
-        applySpacing();
+  }
+  
+  if (elements.resetSpacing) {
+    elements.resetSpacing.addEventListener('click', () => {
+      settings.lineSpacing = 1.5;
+      settings.letterSpacing = 0;
+      settings.wordSpacing = 0;
+      if (elements.lineSpacing) { elements.lineSpacing.value = 1.5; }
+      if (elements.lineSpacingValue) elements.lineSpacingValue.textContent = '1.5';
+      if (elements.letterSpacing) { elements.letterSpacing.value = 0; }
+      if (elements.letterSpacingValue) elements.letterSpacingValue.textContent = '0';
+      if (elements.wordSpacing) { elements.wordSpacing.value = 0; }
+      if (elements.wordSpacingValue) elements.wordSpacingValue.textContent = '0';
+      applySpacing();
     });
-
-    // --- API choice radios ---
-    elements.apiChoiceRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            settings.apiChoice = radio.value;
-            chrome.storage.local.set({ apiChoice: settings.apiChoice });
-            togglePromptContainer();
-        });
+  }
+  
+  // --- AI Settings ---
+  
+  document.querySelectorAll('input[name="api-choice"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      settings.apiChoice = e.target.value;
+      togglePromptContainer();
+      saveLocalSettings();
     });
-
-    // --- Custom prompt ---
-    elements.customPrompt.addEventListener('input', () => {
-        settings.customPrompt = elements.customPrompt.value;
-        chrome.storage.local.set({ customPrompt: settings.customPrompt });
+  });
+  
+  if (elements.customPrompt) {
+    elements.customPrompt.addEventListener('input', (e) => {
+      settings.customPrompt = e.target.value;
+      saveLocalSettings();
     });
-
-    // --- Display mode ---
-    elements.displayMode.addEventListener('change', () => {
-        settings.displayMode = elements.displayMode.value;
-        chrome.storage.local.set({ displayMode: settings.displayMode });
-        relayToActiveTab({ type: 'DISPLAY_MODE_CHANGED', displayMode: settings.displayMode });
-    });
-
-    // --- Toggle full content ---
-    elements.toggleContentBtn.addEventListener('click', () => {
-        const section = elements.fullContentSection;
-        const visible = section.style.display !== 'none';
-        section.style.display = visible ? 'none' : 'block';
-        elements.toggleContentBtn.textContent = visible ? 'Show Full Content' : 'Hide Full Content';
-    });
-
-    // --- Gaze toggle ---
-    elements.gazeToggle.addEventListener('change', () => {
-        settings.gazeEnabled = elements.gazeToggle.checked;
-        chrome.storage.local.set({ gazeEnabled: settings.gazeEnabled });
-        relayToActiveTab({ type: 'GAZE_ENABLED_CHANGED', enabled: settings.gazeEnabled });
-        elements.calibrateBtn.disabled = !settings.gazeEnabled;
-        if (!settings.gazeEnabled) {
-            updateGazeStatus('disabled', 'Disabled');
+  }
+  
+  if (elements.displayMode) {
+    elements.displayMode.addEventListener('change', (e) => {
+      settings.displayMode = e.target.value;
+      saveLocalSettings();
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'DISPLAY_MODE_CHANGED', displayMode: settings.displayMode }).catch(() => {});
         }
+      });
     });
+  }
+  
+  // Toggle full content
+  if (elements.toggleBtn) {
+    elements.toggleBtn.addEventListener('click', () => {
+      if (elements.fullContentSection.classList.contains('hidden')) {
+        elements.fullContentSection.classList.remove('hidden');
+        elements.toggleBtn.textContent = 'Hide Full Content';
+      } else {
+        elements.fullContentSection.classList.add('hidden');
+        elements.toggleBtn.textContent = 'View Full Content';
+      }
+    });
+  }
 
-    // --- Calibrate button ---
+  // --- Gaze Controls ---
+  
+  if (elements.gazeEnabled) {
+    elements.gazeEnabled.addEventListener('change', async (e) => {
+      settings.gazeEnabled = e.target.checked;
+      saveLocalSettings();
+      
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, { type: 'GAZE_ENABLED_CHANGED', gazeEnabled: settings.gazeEnabled }).catch(() => {});
+        }
+      });
+      
+      if (elements.calibrateBtn) elements.calibrateBtn.disabled = !settings.gazeEnabled;
+      
+      if (!settings.gazeEnabled) {
+        updateGazeStatus('ready', 'Disabled');
+      } else {
+        updateGazeStatus('loading', 'Initializing...');
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+          if (tabs[0]) {
+            try {
+              await chrome.tabs.sendMessage(tabs[0].id, { type: 'PING' });
+            } catch (error) {
+              updateGazeStatus('loading', 'Refreshing page...');
+              setTimeout(() => chrome.tabs.reload(tabs[0].id), 300);
+            }
+          }
+        });
+      }
+    });
+  }
+
+  if (elements.calibrateBtn) {
     elements.calibrateBtn.addEventListener('click', () => {
-        relayToActiveTab({ type: 'TRIGGER_CALIBRATION' });
+      elements.calibrateBtn.blur();
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'TRIGGER_CALIBRATION' }).catch(() => {});
+      });
     });
+  }
 
-    // --- Mouth toggle ---
-    elements.mouthToggle.addEventListener('change', () => {
-        const enabled = elements.mouthToggle.checked;
-        chrome.storage.local.set({ mouthClickEnabled: enabled });
-        elements.mouthCalibrateBtn.disabled = !enabled;
-        if (!enabled) updateMouthStatus(false);
+  if (elements.mouthClickEnabled) {
+    elements.mouthClickEnabled.addEventListener('change', (e) => {
+      const enabled = e.target.checked;
+      chrome.storage.local.set({ mouthClickEnabled: enabled });
+      if (elements.calibrateMouthBtn) elements.calibrateMouthBtn.disabled = !enabled;
     });
+  }
 
-    // --- Mouth calibrate button ---
-    elements.mouthCalibrateBtn.addEventListener('click', () => {
-        relayToActiveTab({ type: 'TRIGGER_MOUTH_CALIBRATION' });
+  if (elements.calibrateMouthBtn) {
+    elements.calibrateMouthBtn.addEventListener('click', () => {
+      elements.calibrateMouthBtn.blur();
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'TRIGGER_MOUTH_CALIBRATION' }).catch(() => {});
+      });
     });
+  }
 
-    // --- Dwell slider ---
-    elements.dwellTime.addEventListener('input', () => {
-        settings.gazeDwellMs = parseInt(elements.dwellTime.value);
-        elements.dwellValue.textContent = settings.gazeDwellMs + 'ms';
-        chrome.storage.local.set({ gazeDwellMs: settings.gazeDwellMs });
+  if (elements.dwellTime) {
+    elements.dwellTime.addEventListener('input', (e) => {
+      const value = parseInt(e.target.value, 10);
+      settings.gazeDwellMs = value;
+      if (elements.dwellValue) elements.dwellValue.textContent = value;
+      saveLocalSettings();
     });
+  }
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-function relayToActiveTab(payload) {
-    chrome.runtime.sendMessage({ action: 'relayToActiveTab', payload });
-}
+// ============ Helpers ============
 
 function togglePromptContainer() {
-    elements.promptContainer.style.display =
-        settings.apiChoice === 'prompt' ? 'block' : 'none';
+  if (elements.promptContainer) {
+    elements.promptContainer.classList.toggle('hidden', settings.apiChoice !== 'prompt');
+  }
 }
 
 function applySpacing() {
-    settings.lineSpacing = parseFloat(elements.lineSpacing.value);
-    settings.letterSpacing = parseFloat(elements.letterSpacing.value);
-    settings.wordSpacing = parseFloat(elements.wordSpacing.value);
-
-    chrome.storage.sync.set({
-        lineSpacing: settings.lineSpacing,
-        letterSpacing: settings.letterSpacing,
-        wordSpacing: settings.wordSpacing
-    });
-
-    relayToActiveTab({
-        action: 'adjustSpacing',
-        lineSpacing: settings.lineSpacing,
-        letterSpacing: settings.letterSpacing,
-        wordSpacing: settings.wordSpacing
-    });
+  saveSyncSettings();
+  relayToActiveTab({
+    action: 'adjustSpacing',
+    lineSpacing: settings.lineSpacing,
+    letterSpacing: settings.letterSpacing,
+    wordSpacing: settings.wordSpacing
+  });
 }
 
+function relayToActiveTab(payload) {
+  chrome.runtime.sendMessage({ action: 'relayToActiveTab', payload }).catch(() => {});
+}
+
+// ============ Gaze Status ============
+
 function updateGazeStatus(phase, note) {
-    const dot = elements.gazeStatusDot;
-    const text = elements.gazeStatusText;
+  if (!elements.gazeStatusDot || !elements.gazeStatusText) return;
+  elements.gazeStatusDot.className = 'status-dot';
+  
+  if (note && note.toLowerCase().includes('disabled')) {
+    elements.gazeStatusText.textContent = 'Disabled';
+    return;
+  }
 
-    dot.className = 'status-dot';
-    if (phase === 'loading') dot.classList.add('loading');
-    else if (phase === 'ready') dot.classList.add('ready');
-    else if (phase === 'calibrated') dot.classList.add('calibrated');
-    else if (phase === 'live') dot.classList.add('live');
+  const statusMap = {
+    'loading': { class: 'loading', text: 'Loading models...' },
+    'ready': { class: 'ready', text: note || 'Ready to calibrate' },
+    'live': { class: 'live', text: note || 'Active & tracking' },
+    'calibrating': { class: 'loading', text: 'Calibrating...' }
+  };
 
-    text.textContent = note || phase || 'Disabled';
+  const status = statusMap[phase] || { class: '', text: note || 'Unknown' };
+  if (status.class) elements.gazeStatusDot.classList.add(status.class);
+  elements.gazeStatusText.textContent = status.text;
 }
 
 function updateMouthStatus(calibrated) {
-    const dot = elements.mouthStatusDot;
-    const text = elements.mouthStatusText;
-
-    dot.className = 'status-dot';
-    if (calibrated) {
-        dot.classList.add('calibrated');
-        text.textContent = 'Calibrated';
-    } else {
-        text.textContent = elements.mouthToggle.checked ? 'Not calibrated' : 'Disabled';
-    }
+  if (!elements.mouthStatusDot || !elements.mouthStatusText) return;
+  elements.mouthStatusDot.className = 'status-dot';
+  if (calibrated) {
+    elements.mouthStatusDot.classList.add('ready');
+    elements.mouthStatusText.textContent = 'Calibrated';
+  } else {
+    elements.mouthStatusText.textContent = 'Not calibrated';
+  }
 }
 
-// ============================================================
-// DISPLAY FUNCTIONS
-// ============================================================
+// ============ Display States ============
 
 function hideAll() {
-    elements.welcomeState.style.display = 'none';
-    elements.loadingState.style.display = 'none';
-    elements.contentArea.style.display = 'none';
-    elements.errorState.style.display = 'none';
+  [elements.welcome, elements.loadingExtract, elements.loadingSummarize, elements.contentArea, elements.error].forEach(el => {
+    if (el && el.classList) el.classList.add('hidden');
+  });
 }
 
 function showWelcome() {
-    hideAll();
-    elements.welcomeState.style.display = 'block';
+  hideAll();
+  if (elements.welcome) elements.welcome.classList.remove('hidden');
 }
 
 function showProcessing(title) {
-    hideAll();
-    elements.loadingState.style.display = 'block';
-    elements.loadingText.textContent = 'Extracting content...';
-    setTimeout(() => {
-        if (elements.loadingState.style.display !== 'none') {
-            elements.loadingText.textContent = 'Summarizing...';
-        }
-    }, 500);
+  if (settings.displayMode === 'tooltip') return;
+  hideAll();
+  if (elements.loadingExtract) elements.loadingExtract.classList.remove('hidden');
+  setTimeout(() => {
+    if (elements.loadingExtract) elements.loadingExtract.classList.add('hidden');
+    if (elements.loadingSummarize) elements.loadingSummarize.classList.remove('hidden');
+  }, 500);
 }
 
 function updateSummaryDisplay(formattedContent) {
-    elements.aiSummary.innerHTML = formattedContent;
+  if (settings.displayMode === 'tooltip') return;
+  if (elements.contentArea && elements.contentArea.classList.contains('hidden')) {
+    hideAll();
+    elements.contentArea.classList.remove('hidden');
+  }
+  if (elements.aiSummary) elements.aiSummary.innerHTML = formattedContent;
 }
 
 function displayCachedSummary(title, formattedSummary) {
-    hideAll();
-    elements.contentArea.style.display = 'block';
-    elements.title.textContent = title || '';
-    elements.aiSummary.innerHTML = formattedSummary;
+  hideAll();
+  if (elements.contentArea) elements.contentArea.classList.remove('hidden');
+  if (elements.title) elements.title.textContent = title;
+  if (elements.aiSummary) elements.aiSummary.innerHTML = formattedSummary;
 }
 
-// ============================================================
-// MESSAGE LISTENER
-// ============================================================
+// ============ Message Listener ============
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'STREAMING_UPDATE') {
-        if (settings.displayMode === 'panel') {
-            hideAll();
-            elements.contentArea.style.display = 'block';
-            if (message.title) elements.title.textContent = message.title;
-            updateSummaryDisplay(message.content);
-        }
-        sendResponse({ received: true });
-        return true;
+  if (message.type === 'STREAMING_UPDATE') {
+    if (settings.displayMode === 'panel' || settings.displayMode === 'both') {
+      updateSummaryDisplay(message.content);
     }
-
-    if (message.type === 'PROCESSING_STATUS') {
-        if (settings.displayMode === 'panel') {
-            showProcessing(message.title);
-        }
-        sendResponse({ received: true });
-        return true;
+  }
+  if (message.type === 'PROCESSING_STATUS') {
+    if (message.status === 'started') showProcessing(message.title);
+  }
+  if (message.type === 'DISPLAY_CACHED_SUMMARY') {
+    if (settings.displayMode === 'panel' || settings.displayMode === 'both') {
+      displayCachedSummary(message.title, message.summary);
     }
-
-    if (message.type === 'DISPLAY_CACHED_SUMMARY') {
-        if (settings.displayMode === 'panel') {
-            displayCachedSummary(message.title, message.summary);
-        }
-        sendResponse({ received: true });
-        return true;
-    }
-
-    if (message.type === 'GAZE_STATUS') {
-        updateGazeStatus(message.phase, message.note);
-        sendResponse({ received: true });
-        return true;
-    }
-
-    return true;
+  }
+  if (message.type === 'GAZE_STATUS') {
+    updateGazeStatus(message.phase, message.note);
+  }
 });
 
-// ============================================================
-// STORAGE CHANGE LISTENER
-// ============================================================
-
+// Listen for mouth calibration completion
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.mouthCalV1) {
-        updateMouthStatus(!!changes.mouthCalV1.newValue);
-    }
+  if (area === 'local' && changes.mouthCalV1) {
+    updateMouthStatus(!!changes.mouthCalV1.newValue);
+  }
 });
+
+console.log('[Mollitiam] Sidepanel script loaded');

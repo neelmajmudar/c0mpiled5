@@ -1,158 +1,244 @@
-// Debug HUD overlay for gaze tracking
 (function() {
-    'use strict';
+  'use strict';
 
-    let overlay = null;
-    let pointerDot = null;
-    let statusPanel = null;
-    let debugVisible = false;
-    let gazeEnabled = false;
+  if (window.__gazeOverlayInitialized) {
+    return;
+  }
+  window.__gazeOverlayInitialized = true;
 
-    function createOverlay() {
-        if (overlay) return;
+  const STYLE_ID = 'gaze-overlay-style';
+  const POINTER_ID = 'gaze-pointer';
+  const HUD_ID = 'gaze-debug-hud';
+  const PREVIEW_ID = 'gaze-cam';
 
-        // Inject CSS
-        const cssUrl = chrome.runtime.getURL('gaze/gaze-overlay.css');
-        if (!document.getElementById('mollitiam-gaze-overlay-css')) {
-            const link = document.createElement('link');
-            link.id = 'mollitiam-gaze-overlay-css';
-            link.rel = 'stylesheet';
-            link.href = cssUrl;
-            document.head.appendChild(link);
-        }
+  let pointerEl = null;
+  let hudEl = null;
+  let previewCanvas = null;
+  let hudVisible = true;
+  let pointerVisible = true;
+  let previewVisible = true;
+  let statusPhase = 'loading';
+  let statusNote = '';
+  let lastPointTs = 0;
+  let fpsEMA = 0;
+  let lastConfidence = null;
+  let hasPointerPosition = false;
 
-        // Pointer dot
-        pointerDot = document.createElement('div');
-        pointerDot.id = 'mollitiam-gaze-pointer';
-        pointerDot.className = 'gaze-pointer-dot';
-        document.body.appendChild(pointerDot);
+  injectStyles();
+  ensureElements();
+  setPreviewVisible(true);
 
-        // Status panel
-        statusPanel = document.createElement('div');
-        statusPanel.id = 'mollitiam-gaze-status-panel';
-        statusPanel.className = 'gaze-status-panel';
-        statusPanel.innerHTML = `
-            <div class="gaze-status-header">Mollitiam Gaze Debug</div>
-            <div class="gaze-status-row">
-                <span>Position:</span>
-                <span id="gaze-debug-pos">—</span>
-            </div>
-            <div class="gaze-status-row">
-                <span>Confidence:</span>
-                <span id="gaze-debug-confidence">—</span>
-            </div>
-            <div class="gaze-status-row">
-                <span>Calibration:</span>
-                <span id="gaze-debug-cal">—</span>
-            </div>
-            <div class="gaze-status-row">
-                <span>Status:</span>
-                <span id="gaze-debug-status">—</span>
-            </div>
-        `;
-        document.body.appendChild(statusPanel);
+  document.addEventListener('keydown', handleKeyDown, true);
+  window.addEventListener('gaze:status', handleStatus);
+  window.addEventListener('gaze:point', handlePoint);
+  window.addEventListener('gaze:calibration-started', handleCalibrationStarted);
+  window.addEventListener('gaze:calibration-stopped', handleCalibrationStopped);
+  chrome.storage.onChanged.addListener(handleStorageChange);
 
-        overlay = true;
+  function handleStorageChange(changes, areaName) {
+    if (areaName !== 'local') return;
+    if (changes.gazeEnabled) {
+      const enabled = Boolean(changes.gazeEnabled.newValue);
+      if (!enabled) {
+        // Hide UI when disabled and reset state
+        hasPointerPosition = false;
+        fpsEMA = 0;
+        lastConfidence = null;
+        setPointerVisible(false);
+        setPreviewVisible(false);
+      } else {
+        // Show UI when re-enabled
+        setPreviewVisible(true);
+        // Pointer will show automatically when first point arrives
+        pointerVisible = true;
+      }
+    }
+  }
+
+  function handleCalibrationStarted() {
+    // Hide pointer during calibration so it doesn't cover instructions
+    setPointerVisible(false);
+    console.debug('[GazeOverlay] Pointer hidden for calibration');
+  }
+
+  function handleCalibrationStopped() {
+    // Restore pointer after calibration
+    setPointerVisible(true);
+    console.debug('[GazeOverlay] Pointer restored after calibration');
+  }
+
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID)) {
+      return;
+    }
+    try {
+      const url = chrome.runtime.getURL('gaze/gaze-overlay.css');
+      const link = document.createElement('link');
+      link.id = STYLE_ID;
+      link.rel = 'stylesheet';
+      link.href = url;
+      document.documentElement.appendChild(link);
+    } catch (error) {
+      console.warn('[GazeOverlay] Failed to load stylesheet:', error);
+    }
+  }
+
+  function ensureElements() {
+    if (!hudEl) {
+      hudEl = document.createElement('div');
+      hudEl.id = HUD_ID;
+      hudEl.style.display = hudVisible ? 'block' : 'none';
+      hudEl.textContent = 'Gaze: loading';
+      document.documentElement.appendChild(hudEl);
+    }
+    if (!pointerEl) {
+      pointerEl = document.createElement('div');
+      pointerEl.id = POINTER_ID;
+      pointerEl.style.display = 'none';
+      document.documentElement.appendChild(pointerEl);
+    }
+    if (!previewCanvas) {
+      previewCanvas = document.createElement('canvas');
+      previewCanvas.id = PREVIEW_ID;
+      previewCanvas.width = 320;
+      previewCanvas.height = 240;
+      previewCanvas.style.display = previewVisible ? 'block' : 'none';
+      document.documentElement.appendChild(previewCanvas);
+      window.dispatchEvent(new CustomEvent('gaze:preview-toggle', { detail: { on: previewVisible } }));
+    }
+  }
+
+  function setHudVisible(visible) {
+    hudVisible = Boolean(visible);
+    ensureElements();
+    hudEl.style.display = hudVisible ? 'block' : 'none';
+    if (hudVisible) {
+      updateHud();
+    }
+  }
+
+  function setPointerVisible(visible) {
+    pointerVisible = Boolean(visible);
+    ensureElements();
+    pointerEl.style.display = (pointerVisible && hasPointerPosition) ? 'block' : 'none';
+  }
+
+  function setPreviewVisible(visible) {
+    previewVisible = Boolean(visible);
+    ensureElements();
+    previewCanvas.style.display = previewVisible ? 'block' : 'none';
+    window.dispatchEvent(new CustomEvent('gaze:preview-toggle', { detail: { on: previewVisible } }));
+    updateHud();
+  }
+
+  function handleKeyDown(event) {
+    if (event.defaultPrevented) return;
+    const code = event.code || event.key;
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      if (code === 'KeyP') {
+        event.preventDefault();
+        setPointerVisible(!pointerVisible);
+        console.debug('[GazeOverlay] Pointer', pointerVisible ? 'ON' : 'OFF');
+        return;
+      }
+      if (code === 'KeyV') {
+        event.preventDefault();
+        setPreviewVisible(!previewVisible);
+        console.debug('[GazeOverlay] Preview', previewVisible ? 'ON' : 'OFF');
+        return;
+      }
+      if (code === 'KeyN') {
+        event.preventDefault();
+        window.__gazeHeadMode = !window.__gazeHeadMode;
+        window.dispatchEvent(new CustomEvent('gaze:status', {
+          detail: {
+            phase: 'live',
+            note: window.__gazeHeadMode ? 'head-pointer' : 'iris-pointer'
+          }
+        }));
+        console.debug('[GazeOverlay] Head pointer mode', window.__gazeHeadMode ? 'ENABLED' : 'DISABLED');
+        return;
+      }
+    }
+    if (!event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey) {
+      if (code === 'KeyH') {
+        event.preventDefault();
+        setHudVisible(!hudVisible);
+        console.debug('[GazeOverlay] HUD', hudVisible ? 'ON' : 'OFF');
+      }
+    }
+  }
+
+  function handleStatus(event) {
+    const detail = event && event.detail ? event.detail : {};
+    if (detail.phase) {
+      statusPhase = detail.phase;
+    }
+    if (Object.prototype.hasOwnProperty.call(detail, 'note')) {
+      statusNote = detail.note || '';
+    }
+    updateHud();
+  }
+
+  function handlePoint(event) {
+    if (!event || !event.detail) return;
+    const { x, y, conf, ts } = event.detail;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    ensureElements();
+
+    hasPointerPosition = true;
+    if (pointerVisible && pointerEl) {
+      pointerEl.style.display = 'block';
+      pointerEl.style.left = `${Math.round(x)}px`;
+      pointerEl.style.top = `${Math.round(y)}px`;
     }
 
-    function destroyOverlay() {
-        if (pointerDot) { pointerDot.remove(); pointerDot = null; }
-        if (statusPanel) { statusPanel.remove(); statusPanel = null; }
-        overlay = null;
+    if (typeof ts === 'number') {
+      if (lastPointTs) {
+        const dt = Math.max(1, ts - lastPointTs);
+        const inst = 1000 / dt;
+        fpsEMA = fpsEMA ? (fpsEMA * 0.8 + inst * 0.2) : inst;
+      }
+      lastPointTs = ts;
+    } else if (lastPointTs) {
+      const dt = Math.max(1, performance.now() - lastPointTs);
+      const inst = 1000 / dt;
+      fpsEMA = fpsEMA ? (fpsEMA * 0.8 + inst * 0.2) : inst;
+      lastPointTs = performance.now();
     }
 
-    function updatePointer(x, y, confidence) {
-        if (!pointerDot || !debugVisible) return;
-
-        pointerDot.style.left = (x - 10) + 'px';
-        pointerDot.style.top = (y - 10) + 'px';
-        pointerDot.style.opacity = confidence > 0.3 ? '1' : '0.4';
-
-        const posEl = document.getElementById('gaze-debug-pos');
-        const confEl = document.getElementById('gaze-debug-confidence');
-        if (posEl) posEl.textContent = `${Math.round(x)}, ${Math.round(y)}`;
-        if (confEl) {
-            confEl.textContent = (confidence * 100).toFixed(0) + '%';
-            confEl.style.color = confidence > 0.7 ? '#10B981' : confidence > 0.4 ? '#F59E0B' : '#EF4444';
-        }
+    if (typeof conf === 'number') {
+      lastConfidence = conf;
     }
 
-    function updateStatus(phase, note) {
-        if (!debugVisible) return;
-        const statusEl = document.getElementById('gaze-debug-status');
-        if (statusEl) statusEl.textContent = note || phase || '—';
+    updateHud();
+  }
+
+  function updateHud() {
+    if (!hudEl || !hudVisible) {
+      return;
     }
-
-    function updateCalibrationStatus() {
-        chrome.storage.local.get(['headCalV2', 'mouthCalV1'], (result) => {
-            const calEl = document.getElementById('gaze-debug-cal');
-            if (!calEl) return;
-            const parts = [];
-            if (result.headCalV2) parts.push('Head ✓');
-            else parts.push('Head ✗');
-            if (result.mouthCalV1) parts.push('Mouth ✓');
-            else parts.push('Mouth ✗');
-            calEl.textContent = parts.join(' | ');
-        });
+    const parts = [];
+    if (statusPhase) {
+      parts.push(`Gaze: ${statusPhase}`);
     }
-
-    function toggleDebug() {
-        debugVisible = !debugVisible;
-
-        if (debugVisible) {
-            createOverlay();
-            if (pointerDot) pointerDot.style.display = 'block';
-            if (statusPanel) statusPanel.style.display = 'block';
-            updateCalibrationStatus();
-        } else {
-            if (pointerDot) pointerDot.style.display = 'none';
-            if (statusPanel) statusPanel.style.display = 'none';
-        }
+    if (statusNote) {
+      parts.push(statusNote);
     }
+    if (previewVisible) {
+      parts.push('preview on');
+    }
+    if (fpsEMA) {
+      parts.push(`${Math.round(fpsEMA)} fps`);
+    }
+    if (typeof lastConfidence === 'number') {
+      parts.push(`conf=${lastConfidence.toFixed(2)}`);
+    }
+    hudEl.textContent = parts.length ? parts.join(' · ') : 'Gaze: live';
+  }
 
-    // Listen for gaze points
-    window.addEventListener('gaze:point', (e) => {
-        if (!gazeEnabled) return;
-
-        // Always move pointer dot if gaze is active (even if debug panel hidden)
-        if (pointerDot && gazeEnabled) {
-            pointerDot.style.left = (e.detail.x - 10) + 'px';
-            pointerDot.style.top = (e.detail.y - 10) + 'px';
-            pointerDot.style.display = 'block';
-        }
-
-        if (debugVisible) {
-            updatePointer(e.detail.x, e.detail.y, e.detail.confidence);
-        }
-    });
-
-    // Listen for status updates
-    window.addEventListener('gaze:status', (e) => {
-        updateStatus(e.detail?.phase, e.detail?.note);
-    });
-
-    // Alt+D toggles debug HUD
-    document.addEventListener('keydown', (e) => {
-        if (e.altKey && e.code === 'KeyD') {
-            e.preventDefault();
-            toggleDebug();
-        }
-    });
-
-    // Track gaze enabled state
-    chrome.storage.local.get(['gazeEnabled'], (result) => {
-        gazeEnabled = !!result.gazeEnabled;
-        if (gazeEnabled) createOverlay();
-    });
-
-    chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes.gazeEnabled) {
-            gazeEnabled = !!changes.gazeEnabled.newValue;
-            if (gazeEnabled) {
-                createOverlay();
-            } else {
-                if (pointerDot) pointerDot.style.display = 'none';
-            }
-        }
-    });
+  ensureElements();
+  updateHud();
 })();

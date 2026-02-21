@@ -1,196 +1,451 @@
-// 5-step guided head tracking calibration
 (function() {
-    'use strict';
+  'use strict';
 
-    const STEPS = [
-        { id: 'center', label: 'Look Straight Ahead', instruction: 'Keep your head centered and look directly at the screen.' },
-        { id: 'left', label: 'Turn Left', instruction: 'Slowly turn your head to the left while keeping your eyes on the screen.' },
-        { id: 'right', label: 'Turn Right', instruction: 'Slowly turn your head to the right while keeping your eyes on the screen.' },
-        { id: 'up', label: 'Look Up', instruction: 'Tilt your head slightly upward.' },
-        { id: 'down', label: 'Look Down', instruction: 'Tilt your head slightly downward.' }
-    ];
+  if (window.__gazeHeadCalInitialized) {
+    return;
+  }
+  window.__gazeHeadCalInitialized = true;
 
-    let overlay = null;
-    let currentStep = 0;
-    let samples = [];
-    let calibrating = false;
-    const SAMPLES_NEEDED = 20;
+  const HEAD_CAL_STORAGE_KEY = 'headCalV2';
+  const MIN_RANGE_HORIZONTAL = 0.24;
+  const MIN_RANGE_VERTICAL = 0.22;
+  const MIN_SAMPLES_PER_STEP = 4;         // Reduced from 8 for easier calibration
+  const MAX_SAMPLES_PER_STEP = 120;
+  const CAPTURE_TIMEOUT_MS = 1500;        // Increased from 1200ms for more capture time
+  const BLINK_CONFIRM_DURATION = 900; // ms
 
-    function createOverlay() {
-        overlay = document.createElement('div');
-        overlay.id = 'mollitiam-head-cal-overlay';
-        overlay.style.cssText = `
-            position: fixed; inset: 0; z-index: 999999;
-            background: rgba(0,0,0,0.85); color: white;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        `;
-        overlay.innerHTML = `
-            <div style="text-align:center;max-width:400px;padding:24px;">
-                <h2 id="cal-title" style="font-size:24px;margin-bottom:8px;color:#2DD4BF;">Head Calibration</h2>
-                <p id="cal-step" style="font-size:14px;color:#94A3B8;margin-bottom:16px;">Step 1 of 5</p>
-                <p id="cal-instruction" style="font-size:18px;margin-bottom:24px;line-height:1.4;"></p>
-                <div id="cal-progress" style="width:100%;height:6px;background:#334155;border-radius:3px;margin-bottom:24px;">
-                    <div id="cal-progress-bar" style="height:100%;width:0%;background:#0D9488;border-radius:3px;transition:width 0.3s;"></div>
-                </div>
-                <p style="font-size:13px;color:#64748B;">Hold still and press <kbd style="background:#334155;padding:2px 8px;border-radius:4px;border:1px solid #475569;">Space</kbd> or long-blink (≥1s) to capture</p>
-                <button id="cal-cancel" style="margin-top:20px;padding:8px 20px;background:transparent;color:#94A3B8;border:1px solid #475569;border-radius:8px;cursor:pointer;font-size:13px;">Cancel</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
+  if (typeof window.__gazeHeadCalActive !== 'boolean') {
+    window.__gazeHeadCalActive = false;
+  }
 
-        document.getElementById('cal-cancel').addEventListener('click', cancelCalibration);
-        document.addEventListener('keydown', handleCalKeydown);
-        window.addEventListener('gaze:blink', handleCalBlink);
+  const STEPS = [
+    { label: 'Look CENTER', hint: 'Keep head relaxed, press Space to capture' },
+    { label: 'Look LEFT', hint: 'Rotate gently left then press Space' },
+    { label: 'Look RIGHT', hint: 'Rotate gently right then press Space' },
+    { label: 'Look UP', hint: 'Nod up slightly then press Space' },
+    { label: 'Look DOWN', hint: 'Nod down slightly then press Space' },
+    { label: 'Look CENTER AGAIN', hint: 'Return to neutral and press Space to finish' }
+  ];
+
+  let ui = null;
+  let titleEl = null;
+  let hintEl = null;
+  let footerEl = null;
+  let beginBtn = null;
+  let active = false;
+  let waitingToStart = false;
+  let capturing = false;
+  let stepIndex = 0;
+  let stepSamples = [];
+  let poseAverages = [];
+  let calibration = null;
+  let captureListener = null;
+  let captureTimer = null;
+  let captureRaf = null;
+
+  function ensureUI() {
+    if (ui) return ui;
+    ui = document.createElement('div');
+    ui.id = 'gaze-head-cal';
+    ui.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483646;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: auto;
+    `;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      min-width: 320px;
+      max-width: 420px;
+      padding: 32px 32px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+      pointer-events: auto;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    `;
+
+    titleEl = document.createElement('div');
+    titleEl.style.cssText = 'font-size: 22px; font-weight: 700; margin-bottom: 16px; color: #1a1a1a; letter-spacing: -0.02em;';
+    hintEl = document.createElement('div');
+    hintEl.style.cssText = 'font-size: 16px; opacity: 0.75; margin-bottom: 20px; color: #333; line-height: 1.5;';
+
+    beginBtn = document.createElement('button');
+    beginBtn.textContent = 'Click Here to Begin';
+    beginBtn.style.cssText = `
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      background: #3498db;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      display: none;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    `;
+    beginBtn.onmouseover = () => {
+      beginBtn.style.background = '#2980b9';
+      beginBtn.style.transform = 'translateY(-2px)';
+      beginBtn.style.boxShadow = '0 6px 16px rgba(52, 152, 219, 0.4)';
+    };
+    beginBtn.onmouseout = () => {
+      beginBtn.style.background = '#3498db';
+      beginBtn.style.transform = 'translateY(0)';
+      beginBtn.style.boxShadow = '0 4px 12px rgba(52, 152, 219, 0.3)';
+    };
+    beginBtn.onclick = handleBeginClick;
+
+    footerEl = document.createElement('div');
+    footerEl.style.cssText = 'font-size: 13px; opacity: 0.5; color: #666;';
+
+    panel.appendChild(titleEl);
+    panel.appendChild(hintEl);
+    panel.appendChild(beginBtn);
+    panel.appendChild(footerEl);
+    ui.appendChild(panel);
+    document.documentElement.appendChild(ui);
+    return ui;
+  }
+
+  function setUIVisible(visible) {
+    ensureUI();
+    ui.style.display = visible ? 'flex' : 'none';
+  }
+
+  function updateUI(message, hint, footer, showButton = false) {
+    ensureUI();
+    titleEl.textContent = message;
+    hintEl.textContent = hint || '';
+    footerEl.textContent = footer || 'Space or long blink (≥1s) to confirm · Esc to cancel';
+
+    if (showButton) {
+      beginBtn.style.display = 'inline-block';
+      footerEl.textContent = 'Press Esc to cancel';
+    } else {
+      beginBtn.style.display = 'none';
+    }
+  }
+
+  function handleBeginClick() {
+    waitingToStart = false;
+    beginActualCalibration();
+  }
+
+  function beginActualCalibration() {
+    stepIndex = 0;
+    updateUI(`Step 1 / ${STEPS.length}: ${STEPS[0].label}`, STEPS[0].hint);
+    const centerX = Math.round((window.innerWidth || 1) / 2);
+    const centerY = Math.round((window.innerHeight || 1) / 2);
+    window.dispatchEvent(new CustomEvent('gaze:status', {
+      detail: { phase: 'calibrating', note: 'center' }
+    }));
+    const now = performance.now();
+    window.dispatchEvent(new CustomEvent('gaze:point', {
+      detail: { x: centerX, y: centerY, conf: 0.95, ts: now }
+    }));
+    console.log('[HeadCal] Calibration steps started');
+  }
+
+  function stopCapture() {
+    capturing = false;
+    if (captureListener) {
+      window.removeEventListener('head:frame', captureListener);
+      captureListener = null;
+    }
+    if (captureTimer) {
+      clearTimeout(captureTimer);
+      captureTimer = null;
+    }
+    if (captureRaf) {
+      cancelAnimationFrame(captureRaf);
+      captureRaf = null;
+    }
+  }
+
+  function resetSamples() {
+    stepSamples = STEPS.map(() => []);
+  }
+
+  function startCalibration() {
+    if (active) return;
+    active = true;
+    waitingToStart = true;
+    window.__gazeHeadCalActive = true;
+    stepIndex = 0;
+    calibration = {
+      cx: 0,
+      cy: 0,
+      left: 0,
+      right: 0,
+      up: 0,
+      down: 0,
+      version: 2,
+      ts: Date.now()
+    };
+    resetSamples();
+    poseAverages = new Array(STEPS.length);
+    setUIVisible(true);
+    updateUI(
+      'Head Tracking Calibration',
+      'You\'ll be asked to look in 5 different directions. Click the button below to begin.',
+      'Press Esc to cancel',
+      true  // Show button
+    );
+
+    // Dispatch event to hide tooltip and pointer during calibration
+    window.dispatchEvent(new CustomEvent('gaze:calibration-started'));
+
+    console.log('[HeadCal] Waiting for user to click begin');
+  }
+
+  function stopCalibration(message) {
+    if (!active) return;
+    active = false;
+    waitingToStart = false;
+    window.__gazeHeadCalActive = false;
+    stopCapture();
+    setUIVisible(false);
+
+    // Dispatch event to restore tooltip and pointer after calibration
+    window.dispatchEvent(new CustomEvent('gaze:calibration-stopped'));
+
+    if (message) {
+      console.log('[HeadCal]', message);
+    }
+  }
+
+  function averageSamples(samples) {
+    if (!samples.length) return { nx: NaN, ny: NaN, yaw: NaN, pitch: NaN };
+    const sum = samples.reduce((acc, cur) => {
+      acc.nx += cur.nx;
+      acc.ny += cur.ny;
+      return acc;
+    }, { nx: 0, ny: 0 });
+    const count = samples.length || 1;
+    return {
+      nx: sum.nx / count,
+      ny: sum.ny / count
+    };
+  }
+
+  function collectSamplesForCurrentStep() {
+    return new Promise((resolve) => {
+      stopCapture();
+      capturing = true;
+      const samples = [];
+      const step = STEPS[stepIndex];
+      const start = performance.now();
+      hintEl.textContent = `${step.label}: capturing…`;
+
+      const appendSample = (frame) => {
+        if (!frame) return;
+        const { nx, ny } = frame;
+        if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+        const last = samples[samples.length - 1];
+        if (last && Math.abs(last.nx - nx) < 1e-4 && Math.abs(last.ny - ny) < 1e-4) {
+          return;
+        }
+        samples.push({ nx, ny });
+        if (samples.length >= MIN_SAMPLES_PER_STEP) {
+          hintEl.textContent = `${step.label}: captured ${samples.length}`;
+        }
+      };
+
+      if (window.__lastHeadFrame) {
+        appendSample(window.__lastHeadFrame);
+      }
+
+      const tick = () => {
+        if (!capturing) return;
+        appendSample(window.__lastHeadFrame);
+        if (samples.length >= MAX_SAMPLES_PER_STEP) {
+          stopCapture();
+          resolve(samples);
+          return;
+        }
+        if (performance.now() - start >= CAPTURE_TIMEOUT_MS) {
+          stopCapture();
+          resolve(samples);
+          return;
+        }
+        captureRaf = requestAnimationFrame(tick);
+      };
+
+      captureRaf = requestAnimationFrame(tick);
+      captureTimer = setTimeout(() => {
+        stopCapture();
+        resolve(samples);
+      }, CAPTURE_TIMEOUT_MS + 16);
+    });
+  }
+
+  async function confirmStep() {
+    if (!active || capturing) return;
+    const step = STEPS[stepIndex];
+    const samples = await collectSamplesForCurrentStep();
+    if (!samples || samples.length < MIN_SAMPLES_PER_STEP) {
+      updateUI(`Step ${stepIndex + 1} / ${STEPS.length}: ${step.label}`, `Only captured ${samples.length || 0} frames. Hold steady and press Space again.`);
+      return;
     }
 
-    function updateOverlayUI() {
-        const step = STEPS[currentStep];
-        document.getElementById('cal-title').textContent = step.label;
-        document.getElementById('cal-step').textContent = `Step ${currentStep + 1} of ${STEPS.length}`;
-        document.getElementById('cal-instruction').textContent = step.instruction;
-        document.getElementById('cal-progress-bar').style.width = '0%';
+    stepSamples[stepIndex] = samples;
+    const middleRange = Math.floor(samples.length * 0.35);
+    const sorted = samples.slice().sort((a, b) => a.nx - b.nx || a.ny - b.ny);
+    const trimmed = sorted.slice(middleRange, sorted.length - middleRange);
+    const usable = trimmed.length >= MIN_SAMPLES_PER_STEP ? trimmed : samples;
+    const avg = averageSamples(usable);
+    poseAverages[stepIndex] = avg;
+
+    switch (stepIndex) {
+      case 0:
+        calibration.cx = avg.nx;
+        calibration.cy = avg.ny;
+        break;
+      case 1:
+        calibration.left = Math.max(1e-3, (calibration.cx || 0) - avg.nx);
+        calibration.poseLeft = avg;
+        break;
+      case 2:
+        calibration.right = Math.max(1e-3, avg.nx - (calibration.cx || 0));
+        calibration.poseRight = avg;
+        break;
+      case 3:
+        calibration.up = Math.max(1e-3, (calibration.cy || 0) - avg.ny);
+        calibration.poseUp = avg;
+        break;
+      case 4:
+        calibration.down = Math.max(1e-3, avg.ny - (calibration.cy || 0));
+        calibration.poseDown = avg;
+        break;
+      case 5:
+        calibration.cx = avg.nx;
+        calibration.cy = avg.ny;
+        calibration.poseCenter = avg;
+        break;
+      default:
+        break;
     }
 
-    function handleCalKeydown(e) {
-        if (e.code === 'Space' && calibrating) {
-            e.preventDefault();
-            captureStep();
-        }
-        if (e.code === 'Escape') {
-            cancelCalibration();
-        }
+    stepIndex += 1;
+    if (stepIndex >= STEPS.length) {
+      finalizeCalibration();
+    } else {
+      const nextStep = STEPS[stepIndex];
+      updateUI(`Step ${stepIndex + 1} / ${STEPS.length}: ${nextStep.label}`, nextStep.hint);
     }
+  }
 
-    function handleCalBlink(e) {
-        if (!calibrating) return;
-        if (e.detail?.duration >= 1000) {
-            captureStep();
+  function finalizeCalibration() {
+    const centerPrimary = poseAverages[0] || { nx: calibration.cx, ny: calibration.cy };
+    const centerFinal = poseAverages[5] || centerPrimary;
+    const leftAvg = poseAverages[1] || centerPrimary;
+    const rightAvg = poseAverages[2] || centerPrimary;
+    const upAvg = poseAverages[3] || centerPrimary;
+    const downAvg = poseAverages[4] || centerPrimary;
+
+    const finalCenter = {
+      nx: Number.isFinite(centerFinal.nx) ? centerFinal.nx : centerPrimary.nx || 0,
+      ny: Number.isFinite(centerFinal.ny) ? centerFinal.ny : centerPrimary.ny || 0
+    };
+
+    calibration.cx = finalCenter.nx;
+    calibration.cy = finalCenter.ny;
+    calibration.poseCenter = finalCenter;
+    calibration.poseLeft = calibration.poseLeft || leftAvg;
+    calibration.poseRight = calibration.poseRight || rightAvg;
+    calibration.poseUp = calibration.poseUp || upAvg;
+    calibration.poseDown = calibration.poseDown || downAvg;
+
+    const leftRange = Number.isFinite(leftAvg.nx) ? Math.max(MIN_RANGE_HORIZONTAL, Math.abs(finalCenter.nx - leftAvg.nx)) : MIN_RANGE_HORIZONTAL;
+    const rightRange = Number.isFinite(rightAvg.nx) ? Math.max(MIN_RANGE_HORIZONTAL, Math.abs(rightAvg.nx - finalCenter.nx)) : MIN_RANGE_HORIZONTAL;
+    const upRange = Number.isFinite(upAvg.ny) ? Math.max(MIN_RANGE_VERTICAL, Math.abs(finalCenter.ny - upAvg.ny)) : MIN_RANGE_VERTICAL;
+    const downRange = Number.isFinite(downAvg.ny) ? Math.max(MIN_RANGE_VERTICAL, Math.abs(downAvg.ny - finalCenter.ny)) : MIN_RANGE_VERTICAL;
+
+    calibration.left = leftRange;
+    calibration.right = rightRange;
+    calibration.up = upRange;
+    calibration.down = downRange;
+    calibration.ts = Date.now();
+    try {
+      chrome.storage.local.set({ [HEAD_CAL_STORAGE_KEY]: calibration }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[HeadCal] storage set failed:', chrome.runtime.lastError.message);
+          stopCalibration('Storage unavailable');
+          return;
         }
-    }
-
-    async function captureStep() {
-        const core = window.__gazeCore;
-        if (!core || !core.isRunning()) return;
-
-        const human = core.getHuman();
-        const video = core.getVideo();
-        if (!human || !video) return;
-
-        samples = [];
-        const progressBar = document.getElementById('cal-progress-bar');
-
-        for (let i = 0; i < SAMPLES_NEEDED; i++) {
-            try {
-                const result = await human.detect(video);
-                if (result?.face?.length) {
-                    const face = result.face[0];
-                    if (face.mesh?.length > 1) {
-                        const nose = face.mesh[1];
-                        const leftEye = face.mesh[33];
-                        const rightEye = face.mesh[263];
-                        if (nose && leftEye && rightEye) {
-                            const eyeCenterX = (leftEye[0] + rightEye[0]) / 2;
-                            const eyeCenterY = (leftEye[1] + rightEye[1]) / 2;
-                            samples.push({
-                                noseOffX: nose[0] - eyeCenterX,
-                                noseOffY: nose[1] - eyeCenterY
-                            });
-                        }
-                    }
-                }
-            } catch (e) { /* continue */ }
-
-            progressBar.style.width = ((i + 1) / SAMPLES_NEEDED * 100) + '%';
-            await new Promise(r => setTimeout(r, 50));
-        }
-
-        if (samples.length < 5) {
-            // Not enough samples — retry
-            return;
-        }
-
-        // Average the samples
-        const avgX = samples.reduce((s, v) => s + v.noseOffX, 0) / samples.length;
-        const avgY = samples.reduce((s, v) => s + v.noseOffY, 0) / samples.length;
-
-        // Store per step
-        const stepId = STEPS[currentStep].id;
-        if (!captureStep._data) captureStep._data = {};
-        captureStep._data[stepId] = { x: avgX, y: avgY };
-
-        currentStep++;
-        if (currentStep < STEPS.length) {
-            updateOverlayUI();
-        } else {
-            finishCalibration();
-        }
-    }
-
-    function finishCalibration() {
-        const data = captureStep._data;
-        const calData = {
-            cx: data.center.x,
-            cy: data.center.y,
-            left: data.left.x,
-            right: data.right.x,
-            up: data.up.y,
-            down: data.down.y,
-            version: 2,
-            ts: Date.now()
-        };
-
-        chrome.storage.local.set({ headCalV2: calData });
-        calibrating = false;
-        captureStep._data = null;
-        cleanup();
-
+        console.log('[HeadCal] Saved calibration', calibration);
+        updateUI('✅ Head calibration saved', 'Alt+N toggles head-pointer mode');
+        window.dispatchEvent(new CustomEvent('head:calibrated', { detail: calibration }));
         window.dispatchEvent(new CustomEvent('gaze:status', {
-            detail: { phase: 'calibrated', note: 'Head calibration complete' }
+          detail: { phase: 'live', note: 'head-cal saved' }
         }));
+        setTimeout(() => stopCalibration('Completed'), 900);
+      });
+    } catch (error) {
+      console.warn('[HeadCal] calibration persistence failed:', error);
+      stopCalibration('Storage unavailable');
     }
+  }
 
-    function cancelCalibration() {
-        calibrating = false;
-        captureStep._data = null;
-        cleanup();
+  function handleBlinkRelease(event) {
+    if (!active) return;
+    if (!event.detail || typeof event.detail.duration !== 'number') return;
+    if (event.detail.duration >= BLINK_CONFIRM_DURATION) {
+      confirmStep().catch((error) => console.warn('[HeadCal] capture failed:', error));
     }
+  }
 
-    function cleanup() {
-        document.removeEventListener('keydown', handleCalKeydown);
-        window.removeEventListener('gaze:blink', handleCalBlink);
-        if (overlay) {
-            overlay.remove();
-            overlay = null;
-        }
+  function handleHeadFrame(event) {
+    if (!event.detail) return;
+    const { nx, ny, yaw, pitch } = event.detail;
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+    window.__lastHeadFrame = {
+      nx,
+      ny,
+      yaw: Number.isFinite(yaw) ? yaw : (window.__lastHeadFrame && Number.isFinite(window.__lastHeadFrame.yaw) ? window.__lastHeadFrame.yaw : 0),
+      pitch: Number.isFinite(pitch) ? pitch : (window.__lastHeadFrame && Number.isFinite(window.__lastHeadFrame.pitch) ? window.__lastHeadFrame.pitch : 0)
+    };
+  }
+
+  document.addEventListener('keydown', (event) => {
+    const code = event.code || event.key;
+    if (event.altKey && !event.ctrlKey && !event.metaKey && code === 'KeyH') {
+      event.preventDefault();
+      if (active) {
+        stopCalibration('Cancelled');
+      } else {
+        startCalibration();
+      }
+      return;
     }
-
-    function startCalibration() {
-        if (calibrating) return;
-        calibrating = true;
-        currentStep = 0;
-        samples = [];
-        captureStep._data = {};
-        createOverlay();
-        updateOverlayUI();
+    if (!active) return;
+    if (event.key === ' ') {
+      event.preventDefault();
+      // Ignore SPACE when waiting for user to click begin button
+      if (waitingToStart) return;
+      confirmStep().catch((error) => console.warn('[HeadCal] capture failed:', error));
     }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      stopCalibration('Cancelled via Escape');
+    }
+  }, true);
 
-    // Triggers
-    window.addEventListener('gaze:startCalibration', startCalibration);
-
-    document.addEventListener('keydown', (e) => {
-        if (e.altKey && e.code === 'KeyH') {
-            e.preventDefault();
-            startCalibration();
-        }
-    });
-
-    // Message trigger
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'TRIGGER_CALIBRATION') {
-            startCalibration();
-            sendResponse({ success: true });
-            return true;
-        }
-    });
+  window.addEventListener('head:frame', handleHeadFrame);
+  window.addEventListener('blink:released', handleBlinkRelease);
 })();

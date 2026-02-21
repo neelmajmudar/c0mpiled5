@@ -1,64 +1,78 @@
+// ========================================
+// MOLLITIAM - ACCESSIBILITY MODULE
+// OpenDyslexic font, themes, spacing adjustments
+// ========================================
+
 let fontEnabled = false;
 let hoverEnabled = false;
 let simplifiedElements = [];
 
-// Load font state on init
-chrome.storage.sync.get(['fontEnabled'], (result) => {
-    fontEnabled = !!result.fontEnabled;
-    if (fontEnabled) applyOpenDyslexicFont();
+// Load feature states from storage when script loads
+chrome.storage.sync.get(['fontEnabled'], function(result) {
+    fontEnabled = result.fontEnabled || false;
+    if (fontEnabled) {
+        toggleOpenDyslexicFont(true);
+    }
 });
 
+// Function to toggle OpenDyslexic font
 function toggleOpenDyslexicFont(enabled) {
-    fontEnabled = enabled;
+    console.log(`[Mollitiam] ${enabled ? 'Applying' : 'Removing'} OpenDyslexic font...`);
+    
     if (enabled) {
-        applyOpenDyslexicFont();
+        // Add font-face definition if it doesn't exist
+        if (!document.getElementById('opendyslexic-font-face')) {
+            const fontFaceStyle = document.createElement('style');
+            fontFaceStyle.id = 'opendyslexic-font-face';
+            fontFaceStyle.textContent = `
+                @font-face {
+                    font-family: 'OpenDyslexic';
+                    src: url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.otf')}') format('opentype');
+                    font-weight: normal;
+                    font-style: normal;
+                    font-display: swap;
+                }
+            `;
+            document.head.appendChild(fontFaceStyle);
+        }
+
+        // Create or update style element to apply font to entire page
+        let fontStyle = document.getElementById('opendyslexic-font-style');
+        if (!fontStyle) {
+            fontStyle = document.createElement('style');
+            fontStyle.id = 'opendyslexic-font-style';
+            document.head.appendChild(fontStyle);
+        }
+
+        fontStyle.textContent = `
+            body, body * {
+                font-family: 'OpenDyslexic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
+                line-height: 1.5;
+                letter-spacing: 0.5px;
+                word-spacing: 3px;
+            }
+        `;
     } else {
-        removeOpenDyslexicFont();
+        const fontStyle = document.getElementById('opendyslexic-font-style');
+        if (fontStyle) fontStyle.parentNode.removeChild(fontStyle);
+
+        const fontFaceStyle = document.getElementById('opendyslexic-font-face');
+        if (fontFaceStyle) fontFaceStyle.parentNode.removeChild(fontFaceStyle);
     }
 }
 
 function applyOpenDyslexicFont() {
-    // Inject @font-face
-    if (!document.getElementById('opendyslexic-font-face')) {
-        const fontFace = document.createElement('style');
-        fontFace.id = 'opendyslexic-font-face';
-        fontFace.textContent = `
-            @font-face {
-                font-family: 'OpenDyslexic';
-                src: url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.otf')}') format('opentype');
-                font-weight: normal;
-                font-style: normal;
-            }
-        `;
-        document.head.appendChild(fontFace);
-    }
-
-    // Inject global style
-    if (!document.getElementById('opendyslexic-font-style')) {
-        const style = document.createElement('style');
-        style.id = 'opendyslexic-font-style';
-        style.textContent = `
-            body, body * {
-                font-family: 'OpenDyslexic', sans-serif !important;
-                line-height: 1.5 !important;
-                letter-spacing: 0.5px !important;
-                word-spacing: 3px !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+    toggleOpenDyslexicFont(true);
 }
 
 function removeOpenDyslexicFont() {
-    const fontFace = document.getElementById('opendyslexic-font-face');
-    if (fontFace) fontFace.remove();
-    const style = document.getElementById('opendyslexic-font-style');
-    if (style) style.remove();
+    toggleOpenDyslexicFont(false);
 }
 
+// Function to apply spacing adjustments
 function applySpacingAdjustments(lineSpacing, letterSpacing, wordSpacing) {
-    const existing = document.getElementById('spacing-adjustments-style');
-    if (existing) existing.remove();
+    const existingStyle = document.getElementById('spacing-adjustments-style');
+    if (existingStyle) existingStyle.remove();
 
     const style = document.createElement('style');
     style.id = 'spacing-adjustments-style';
@@ -72,92 +86,93 @@ function applySpacingAdjustments(lineSpacing, letterSpacing, wordSpacing) {
     document.head.appendChild(style);
 }
 
+// Function to apply selected theme
 function applyTheme(themeName) {
-    let style = document.getElementById('theme-style');
-
-    if (themeName === 'default') {
-        if (style) style.remove();
-        return;
-    }
-
     const theme = themes[themeName];
     if (!theme) return;
 
-    if (!style) {
-        style = document.createElement('style');
-        style.id = 'theme-style';
-        document.head.appendChild(style);
+    const { backgroundColor, textColor } = theme;
+
+    let themeStyle = document.getElementById('theme-style');
+    if (!themeStyle) {
+        themeStyle = document.createElement('style');
+        themeStyle.id = 'theme-style';
+        document.head.appendChild(themeStyle);
     }
 
-    style.textContent = `
+    if (themeName === 'default') {
+        themeStyle.textContent = '';
+        return;
+    }
+
+    themeStyle.textContent = `
         html, body {
-            background-color: ${theme.backgroundColor} !important;
-            color: ${theme.textColor} !important;
+            background-color: ${backgroundColor} !important;
+            color: ${textColor} !important;
         }
         body * {
-            color: ${theme.textColor} !important;
+            background-color: ${backgroundColor} !important;
+            color: ${textColor} !important;
         }
     `;
 }
 
+// Hover feature for showing original text on simplified elements
 function enableHoverFeature() {
-    hoverEnabled = true;
-    const elements = document.querySelectorAll('.simplified-text');
-    elements.forEach(el => {
+    console.log("[Mollitiam] Enabling hover feature...");
+    simplifiedElements = document.querySelectorAll('.simplified-text');
+    simplifiedElements.forEach(el => {
         el.addEventListener('mouseenter', showOriginalText);
         el.addEventListener('mouseleave', hideOriginalText);
     });
 }
 
 function disableHoverFeature() {
-    hoverEnabled = false;
-    const elements = document.querySelectorAll('.simplified-text');
-    elements.forEach(el => {
+    console.log("[Mollitiam] Disabling hover feature...");
+    simplifiedElements.forEach(el => {
         el.removeEventListener('mouseenter', showOriginalText);
         el.removeEventListener('mouseleave', hideOriginalText);
     });
 }
 
 function showOriginalText(event) {
-    const el = event.currentTarget;
-    const originalText = el.getAttribute('data-original-text');
+    const originalText = event.currentTarget.getAttribute('data-original-text');
     if (!originalText) return;
 
     const tooltip = document.createElement('div');
     tooltip.className = 'original-text-tooltip';
     tooltip.textContent = originalText;
-
-    const rect = el.getBoundingClientRect();
-    tooltip.style.position = 'fixed';
-    tooltip.style.left = rect.left + 'px';
-    tooltip.style.top = (rect.top - 10) + 'px';
-    tooltip.style.transform = 'translateY(-100%)';
-
     document.body.appendChild(tooltip);
-    el._originalTextTooltip = tooltip;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    tooltip.style.left = `${rect.left + window.scrollX}px`;
+    tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 10}px`;
+
+    event.currentTarget._originalTextTooltip = tooltip;
 }
 
 function hideOriginalText(event) {
-    const el = event.currentTarget;
-    if (el._originalTextTooltip) {
-        el._originalTextTooltip.remove();
-        el._originalTextTooltip = null;
+    const tooltip = event.currentTarget._originalTextTooltip;
+    if (tooltip) {
+        tooltip.remove();
+        event.currentTarget._originalTextTooltip = null;
     }
 }
 
+// Initialize accessibility features on DOMContentLoaded
 function initAccessibility() {
-    chrome.storage.sync.get(['selectedTheme'], (result) => {
-        if (result.selectedTheme) {
-            applyTheme(result.selectedTheme);
-        }
+    // Apply saved theme
+    chrome.storage.sync.get(['selectedTheme'], function(result) {
+        const selectedTheme = result.selectedTheme || 'default';
+        applyTheme(selectedTheme);
     });
-
-    chrome.storage.sync.get(['lineSpacing', 'letterSpacing', 'wordSpacing'], (result) => {
-        const lineSpacing = result.lineSpacing || 1.5;
-        const letterSpacing = result.letterSpacing || 0;
-        const wordSpacing = result.wordSpacing || 0;
-        if (lineSpacing !== 1.5 || letterSpacing !== 0 || wordSpacing !== 0) {
-            applySpacingAdjustments(lineSpacing, letterSpacing, wordSpacing);
-        }
+    
+    // Load and apply initial spacing settings
+    chrome.storage.sync.get(['lineSpacing', 'letterSpacing', 'wordSpacing'], function(result) {
+        applySpacingAdjustments(
+            result.lineSpacing || 1.5,
+            result.letterSpacing || 0,
+            result.wordSpacing || 0
+        );
     });
 }

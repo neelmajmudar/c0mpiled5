@@ -1,240 +1,315 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mollitiam</title>
-    <link rel="stylesheet" href="sidepanel.css">
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="sidepanel.css?v=1">
 </head>
 <body>
+  <div id="container">
     <!-- Header -->
-    <header class="header">
-        <div class="header-inner">
-            <img src="icons/icon-48.png" alt="Mollitiam" class="mollitiam-logo">
-            <div class="header-text">
-                <h1 class="mollitiam-title">Mollitiam</h1>
-                <span class="header-tagline">Accessibility &bull; AI &bull; Hands-Free</span>
-            </div>
-        </div>
-    </header>
+    <div id="mollitiam-header">
+      <div class="header-brand">
+        <img src="icons/icon-48.png" alt="Mollitiam" class="mollitiam-logo">
+        <h2 class="mollitiam-title">Mollitiam</h2>
+      </div>
+      <span class="header-tagline">Accessibility &bull; AI &bull; Hands-Free</span>
+    </div>
 
     <!-- Tab Navigation -->
-    <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="accessibility">&#9855; Accessibility</button>
-        <button class="tab-btn" data-tab="summary">&#129302; AI Summary</button>
-        <button class="tab-btn" data-tab="tracking">&#128065;&#65039; Tracking</button>
-    </nav>
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="accessibility">
+        <span class="tab-icon">&#9855;</span>
+        <span class="tab-label">Accessibility</span>
+      </button>
+      <button class="tab-btn" data-tab="summarize">
+        <span class="tab-icon">&#129302;</span>
+        <span class="tab-label">AI Summary</span>
+      </button>
+      <button class="tab-btn" data-tab="tracking">
+        <span class="tab-icon">&#127919;</span>
+        <span class="tab-label">Tracking</span>
+      </button>
+    </div>
 
-    <!-- Tab 1: Accessibility -->
+    <!-- ==================== TAB: Accessibility ==================== -->
     <div class="tab-content active" id="tab-accessibility">
-        <!-- Text Simplification -->
-        <div class="card">
-            <h3 class="card-title">&#128214; Text Simplification</h3>
-            <div class="setting-group">
-                <label class="setting-label">Reading Level</label>
-                <div class="level-buttons">
-                    <button class="level-btn" data-level="1">Mild</button>
-                    <button class="level-btn selected" data-level="3">Medium</button>
-                    <button class="level-btn" data-level="5">Strong</button>
-                </div>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label" for="optimize-mode">Optimize For</label>
-                <select id="optimize-mode" class="select-input">
-                    <option value="textClarity">Text Clarity</option>
-                    <option value="focusStructure">Focus &amp; Structure</option>
-                    <option value="wordPattern">Word Patterns</option>
-                </select>
-                <span class="help-text">Choose how text is restructured for your needs</span>
-            </div>
-            <button id="simplify-btn" class="btn btn-primary">&#10024; Simplify Page Text</button>
+      
+      <!-- Simplify Text Section -->
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#10024;</span>
+          Text Simplification
+        </h3>
+        
+        <div class="setting-group">
+          <label class="setting-label">Simplification Level</label>
+          <div class="level-buttons">
+            <button class="level-btn" data-level="1">Low</button>
+            <button class="level-btn selected" data-level="3">Mid</button>
+            <button class="level-btn" data-level="5">High</button>
+          </div>
+          <p class="help-text">Higher levels use simpler language</p>
         </div>
 
-        <!-- Visual Settings -->
-        <div class="card">
-            <h3 class="card-title">&#127912; Visual Settings</h3>
-            <div class="setting-row">
-                <span class="setting-label">OpenDyslexic Font</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="font-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="setting-row">
-                <span class="setting-label">Show Original on Hover</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="hover-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label" for="theme-select">Color Theme</label>
-                <select id="theme-select" class="select-input">
-                    <option value="default">Default</option>
-                    <option value="highContrast">High Contrast</option>
-                    <option value="highContrastAlt">High Contrast (Dark)</option>
-                    <option value="darkMode">Dark Mode</option>
-                    <option value="sepia">Sepia</option>
-                    <option value="lowBlueLight">Low Blue Light</option>
-                    <option value="softPastelBlue">Soft Pastel Blue</option>
-                    <option value="softPastelGreen">Soft Pastel Green</option>
-                    <option value="creamPaper">Cream Paper</option>
-                    <option value="grayScale">Grayscale</option>
-                    <option value="blueLightFilter">Blue Light Filter</option>
-                    <option value="highContrastYellowBlack">Yellow on Black</option>
-                    <option value="highContrastBlackYellow">Black on Yellow</option>
-                </select>
-            </div>
+        <div class="setting-group">
+          <label class="setting-label" for="optimize-mode">Optimization Mode</label>
+          <select id="optimize-mode" class="setting-select">
+            <option value="textClarity" selected>Text Clarity</option>
+            <option value="focusStructure">Focus &amp; Structure (ADHD)</option>
+            <option value="wordPattern">Word Patterns (Dyslexia)</option>
+          </select>
         </div>
 
-        <!-- Spacing -->
-        <div class="card">
-            <h3 class="card-title">&#128207; Spacing</h3>
-            <div class="setting-group">
-                <label class="setting-label">Line Spacing <span id="line-spacing-value" class="slider-value">1.5</span></label>
-                <input type="range" id="line-spacing" class="slider" min="1" max="3" step="0.1" value="1.5">
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">Letter Spacing <span id="letter-spacing-value" class="slider-value">0</span></label>
-                <input type="range" id="letter-spacing" class="slider" min="0" max="5" step="0.5" value="0">
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">Word Spacing <span id="word-spacing-value" class="slider-value">0</span></label>
-                <input type="range" id="word-spacing" class="slider" min="0" max="10" step="1" value="0">
-            </div>
-            <button id="reset-spacing-btn" class="btn btn-secondary">&#8617; Reset Spacing</button>
+        <button id="simplify-btn" class="btn primary full-width">
+          Simplify Page Text
+        </button>
+      </div>
+
+      <!-- Visual Accessibility -->
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#127912;</span>
+          Visual Settings
+        </h3>
+
+        <div class="setting-group">
+          <label class="toggle-container">
+            <input type="checkbox" id="font-toggle">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">OpenDyslexic Font</span>
+          </label>
         </div>
+
+        <div class="setting-group">
+          <label class="toggle-container">
+            <input type="checkbox" id="hover-toggle">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Show Original on Hover</span>
+          </label>
+          <p class="help-text">Hover simplified text to see original</p>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label" for="theme-select">Color Theme</label>
+          <select id="theme-select" class="setting-select">
+            <option value="default">Default</option>
+            <option value="highContrast">High Contrast</option>
+            <option value="highContrastAlt">High Contrast (Dark)</option>
+            <option value="darkMode">Dark Mode</option>
+            <option value="sepia">Sepia</option>
+            <option value="lowBlueLight">Low Blue Light</option>
+            <option value="softPastelBlue">Soft Blue</option>
+            <option value="softPastelGreen">Soft Green</option>
+            <option value="creamPaper">Cream Paper</option>
+            <option value="grayScale">Grayscale</option>
+            <option value="blueLightFilter">Blue Light Filter</option>
+            <option value="highContrastYellowBlack">Yellow on Black</option>
+            <option value="highContrastBlackYellow">Black on Yellow</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Spacing Controls -->
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#8596;&#65039;</span>
+          Spacing
+        </h3>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            Line Spacing: <span id="line-spacing-value">1.5</span>
+          </label>
+          <input type="range" id="line-spacing" min="1" max="3" step="0.1" value="1.5" class="slider">
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            Letter Spacing: <span id="letter-spacing-value">0</span>px
+          </label>
+          <input type="range" id="letter-spacing" min="0" max="5" step="0.5" value="0" class="slider">
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            Word Spacing: <span id="word-spacing-value">0</span>px
+          </label>
+          <input type="range" id="word-spacing" min="0" max="10" step="1" value="0" class="slider">
+        </div>
+
+        <button id="reset-spacing" class="btn secondary full-width">Reset to Defaults</button>
+      </div>
     </div>
 
-    <!-- Tab 2: AI Summary -->
-    <div class="tab-content" id="tab-summary">
-        <!-- Settings -->
-        <div class="card">
-            <h3 class="card-title">&#9881;&#65039; Summary Settings</h3>
-            <div class="setting-group">
-                <label class="setting-label" for="display-mode">Display Mode</label>
-                <select id="display-mode" class="select-input">
-                    <option value="tooltip">Tooltip on Hover</option>
-                    <option value="panel">Side Panel</option>
-                </select>
-            </div>
-            <div class="setting-group">
-                <label class="setting-label">API Choice</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="api-choice" value="summarization" checked>
-                        <span>Summarization API</span>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="api-choice" value="prompt">
-                        <span>Prompt API</span>
-                    </label>
-                </div>
-            </div>
-            <div id="prompt-container" class="setting-group" style="display:none;">
-                <label class="setting-label" for="custom-prompt">Custom Prompt</label>
-                <textarea id="custom-prompt" class="textarea-input" rows="3">Summarize this article in 2-3 sentences</textarea>
-            </div>
-        </div>
+    <!-- ==================== TAB: AI Summary ==================== -->
+    <div class="tab-content" id="tab-summarize">
+      
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#9881;&#65039;</span>
+          Summarization Settings
+        </h3>
 
-        <!-- Loading state -->
-        <div id="loading-state" class="state-container" style="display:none;">
-            <div class="spinner"></div>
-            <p id="loading-text" class="status-text">Extracting content...</p>
+        <div class="setting-group">
+          <label class="setting-label" for="display-mode">Display Location</label>
+          <select id="display-mode" class="setting-select">
+            <option value="tooltip" selected>Tooltip Only</option>
+            <option value="panel">Side Panel Only</option>
+          </select>
         </div>
+        
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="api-choice" value="summarization" id="radio-summarization" checked>
+            <span>Summarization API</span>
+          </label>
+          <label>
+            <input type="radio" name="api-choice" value="prompt" id="radio-prompt">
+            <span>Prompt API (Custom)</span>
+          </label>
+        </div>
+        
+        <div id="prompt-container" class="hidden">
+          <label class="setting-label" for="custom-prompt">Custom Prompt</label>
+          <textarea id="custom-prompt" rows="3" placeholder="Enter your summarization prompt...">Summarize this article in 2-3 sentences</textarea>
+        </div>
+      </div>
 
-        <!-- Content area -->
-        <div id="content-area" class="state-container" style="display:none;">
-            <h2 id="title" class="content-title"></h2>
-            <h4 class="section-heading">AI Summary</h4>
-            <div id="ai-summary" class="ai-summary-box"></div>
-            <button id="toggle-content-btn" class="btn btn-secondary" style="display:none;">Show Full Content</button>
-            <div id="full-content-section" style="display:none;">
-                <div id="article-content" class="article-content"></div>
-                <div id="fallback-article" class="article-content"></div>
-            </div>
+      <!-- Loading States -->
+      <div id="loading-extract" class="hidden">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Extracting content...</p>
         </div>
+      </div>
+      
+      <div id="loading-summarize" class="hidden">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Generating summary...</p>
+        </div>
+      </div>
+      
+      <!-- Content Area -->
+      <div id="content-area" class="hidden">
+        <h1 id="title"></h1>
+        
+        <div id="summary-section">
+          <h2 class="section-heading">AI Summary</h2>
+          <div id="ai-summary"></div>
+        </div>
+        
+        <button id="toggle-full-content" class="btn secondary full-width">View Full Content</button>
+        
+        <div id="full-content-section" class="hidden">
+          <h2 class="section-heading">Full Content</h2>
+          <div id="article-content"></div>
+        </div>
+      </div>
+      
+      <!-- Error State -->
+      <div id="error" class="hidden">
+        <div class="error-card">
+          <p id="error-message"></p>
+        </div>
+        <div id="fallback-content" class="hidden">
+          <h2 class="section-heading">Full Content (Fallback)</h2>
+          <h1 id="fallback-title"></h1>
+          <div id="fallback-article"></div>
+        </div>
+      </div>
 
-        <!-- Error state -->
-        <div id="error-state" class="state-container" style="display:none;">
-            <div class="error-card">
-                <span id="error-message">An error occurred</span>
-            </div>
+      <!-- Welcome State -->
+      <div id="welcome">
+        <div class="welcome-content">
+          <div class="welcome-icon">&#128170;</div>
+          <p>Hover over any link to get an AI summary, or switch to the Accessibility tab to simplify page text!</p>
         </div>
-
-        <!-- Welcome state -->
-        <div id="welcome-state" class="state-container">
-            <div class="welcome-content">
-                <div class="welcome-icon">&#127793;</div>
-                <p class="welcome-text">Hover over any link to see an AI-powered summary</p>
-            </div>
-        </div>
+      </div>
     </div>
 
-    <!-- Tab 3: Tracking -->
+    <!-- ==================== TAB: Head Tracking ==================== -->
     <div class="tab-content" id="tab-tracking">
-        <!-- Head Tracking -->
-        <div class="card">
-            <h3 class="card-title">&#127919; Head Tracking</h3>
-            <div class="setting-row">
-                <span class="setting-label">Enable Head Tracking</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="gaze-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="status-indicator">
-                <span class="status-dot" id="gaze-status-dot"></span>
-                <span id="gaze-status-text">Disabled</span>
-            </div>
-            <button id="calibrate-btn" class="btn btn-secondary" disabled>&#127919; Calibrate Head Tracking</button>
-            <div class="setting-group">
-                <label class="setting-label">Dwell Time <span id="dwell-value" class="slider-value">600ms</span></label>
-                <input type="range" id="dwell-time" class="slider" min="300" max="1200" step="50" value="600">
-            </div>
+      
+      <!-- Head Tracking -->
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#127919;</span>
+          Head Tracking (Hands-Free)
+        </h3>
+
+        <div class="setting-group">
+          <label class="toggle-container">
+            <input type="checkbox" id="gaze-enabled" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable Head Tracking</span>
+          </label>
+          <p class="help-text">Requires camera access for head movement detection</p>
         </div>
 
-        <!-- Mouth Click -->
-        <div class="card">
-            <h3 class="card-title">&#128068; Mouth Click</h3>
-            <div class="setting-row">
-                <span class="setting-label">Enable Mouth Click</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="mouth-toggle">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="status-indicator">
-                <span class="status-dot" id="mouth-status-dot"></span>
-                <span id="mouth-status-text">Disabled</span>
-            </div>
-            <button id="mouth-calibrate-btn" class="btn btn-secondary" disabled>&#128068; Calibrate Mouth Click</button>
+        <div class="status-indicator">
+          <span class="status-dot" id="gaze-status-dot"></span>
+          <span id="gaze-status-text">Disabled</span>
         </div>
 
-        <!-- Keyboard Shortcuts -->
-        <details class="shortcuts-panel">
-            <summary>&#9000;&#65039; Keyboard Shortcuts</summary>
-            <div class="shortcuts-list">
-                <div class="shortcut-item">
-                    <kbd>Alt</kbd> + <kbd>H</kbd>
-                    <span>Start head calibration</span>
-                </div>
-                <div class="shortcut-item">
-                    <kbd>Alt</kbd> + <kbd>B</kbd>
-                    <span>Toggle blink-to-click</span>
-                </div>
-                <div class="shortcut-item">
-                    <kbd>Alt</kbd> + <kbd>G</kbd>
-                    <span>Toggle gaze tracking</span>
-                </div>
-                <div class="shortcut-item">
-                    <kbd>Alt</kbd> + <kbd>D</kbd>
-                    <span>Toggle debug HUD</span>
-                </div>
-            </div>
+        <button id="calibrate-btn" class="btn secondary full-width">
+          Calibrate Head Position
+        </button>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            Dwell Time: <span id="dwell-value">600</span>ms
+          </label>
+          <input type="range" id="dwell-time" min="300" max="1200" step="50" value="600" class="slider">
+          <p class="help-text">Time to hover before clicking a link</p>
+        </div>
+      </div>
+
+      <!-- Mouth Click -->
+      <div class="card">
+        <h3 class="card-title">
+          <span class="card-icon">&#128068;</span>
+          Mouth Click (Optional)
+        </h3>
+
+        <div class="setting-group">
+          <label class="toggle-container">
+            <input type="checkbox" id="mouth-click-enabled">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Enable Mouth Click</span>
+          </label>
+          <p class="help-text">Open your mouth wide to trigger clicks</p>
+        </div>
+
+        <div class="status-indicator">
+          <span class="status-dot" id="mouth-status-dot"></span>
+          <span id="mouth-status-text">Not calibrated</span>
+        </div>
+
+        <button id="calibrate-mouth-btn" class="btn secondary full-width">
+          Calibrate Mouth Click
+        </button>
+      </div>
+
+      <!-- Keyboard Shortcuts -->
+      <div class="card">
+        <details class="keyboard-shortcuts">
+          <summary>Keyboard Shortcuts</summary>
+          <ul>
+            <li><kbd>Alt+H</kbd> <span>Calibrate head tracking</span></li>
+            <li><kbd>Alt+M</kbd> <span>Calibrate mouth click</span></li>
+            <li><kbd>Alt+P</kbd> <span>Toggle pointer visibility</span></li>
+            <li><kbd>Alt+V</kbd> <span>Toggle camera preview</span></li>
+            <li><kbd>Shift+H</kbd> <span>Toggle debug HUD</span></li>
+          </ul>
         </details>
+      </div>
     </div>
-
-    <script src="sidepanel.js"></script>
+  </div>
+  
+  <script src="sidepanel.js?v=1"></script>
 </body>
 </html>

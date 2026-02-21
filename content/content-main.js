@@ -1,59 +1,76 @@
+// ========================================
+// MOLLITIAM - CONTENT MAIN ORCHESTRATOR
+// Handles message routing between modules
+// ========================================
+
+// Listen for messages from popup/sidepanel/background
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    switch (request.action) {
-        case 'simplify':
-            (async () => {
+    (async () => {
+        console.log("[Mollitiam] Received action:", request.action);
+        switch (request.action) {
+            case "simplify":
                 try {
                     const result = await simplifyPageContent();
-                    sendResponse(result);
-                } catch (e) {
-                    sendResponse({ success: false, error: e.message });
+                    sendResponse(result || { success: true });
+                } catch (error) {
+                    console.error('[Mollitiam] Error simplifying content:', error);
+                    sendResponse({ success: false, error: error.message });
                 }
-            })();
-            return true;
+                break;
+                
+            case "toggleFont":
+                fontEnabled = request.enabled;
+                toggleOpenDyslexicFont(fontEnabled);
+                sendResponse({ success: true });
+                break;
+                
+            case "applyTheme":
+                applyTheme(request.theme);
+                sendResponse({ success: true });
+                break;
+                
+            case "getFontState":
+                sendResponse({ fontEnabled: fontEnabled });
+                break;
+                
+            case "adjustSpacing":
+                const { lineSpacing, letterSpacing, wordSpacing } = request;
+                applySpacingAdjustments(lineSpacing, letterSpacing, wordSpacing);
+                sendResponse({ success: true });
+                break;
+                
+            case "toggleHover":
+                hoverEnabled = request.enabled;
+                if (hoverEnabled) {
+                    enableHoverFeature();
+                } else {
+                    disableHoverFeature();
+                }
+                sendResponse({ success: true });
+                break;
 
-        case 'toggleFont':
-            toggleOpenDyslexicFont(request.enabled);
-            sendResponse({ success: true });
-            return true;
+            case "getHoverState":
+                sendResponse({ hoverEnabled: hoverEnabled });
+                break;
 
-        case 'applyTheme':
-            applyTheme(request.theme);
-            sendResponse({ success: true });
-            return true;
-
-        case 'getFontState':
-            sendResponse({ fontEnabled });
-            return true;
-
-        case 'adjustSpacing':
-            applySpacingAdjustments(request.lineSpacing, request.letterSpacing, request.wordSpacing);
-            sendResponse({ success: true });
-            return true;
-
-        case 'toggleHover':
-            if (request.enabled) {
-                enableHoverFeature();
-            } else {
-                disableHoverFeature();
-            }
-            sendResponse({ success: true });
-            return true;
-
-        case 'getHoverState':
-            sendResponse({ hoverEnabled });
-            return true;
-    }
-
+            default:
+                sendResponse({ success: true });
+                break;
+        }
+    })();
     return true;
 });
 
-// Initialize on ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initAccessibility();
-        ensureInitialized();
-    });
-} else {
+// Initialize on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    initAccessibility();
+    ensureInitialized();
+});
+
+// Also initialize immediately if DOM is already loaded
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
     initAccessibility();
     ensureInitialized();
 }
+
+console.log('[Mollitiam] Content scripts loaded');

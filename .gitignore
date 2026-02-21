@@ -27,3 +27,9 @@ desktop.ini
 *.crx
 *.pem
 *.zip
+
+# Rebuild prompts & skill references
+REBUILD_PROMPT_PART1.md
+REBUILD_PROMPT_PART2.md
+REBUILD_PROMPT_PART3.md
+ui-ux-pro-max-skill/

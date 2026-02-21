@@ -31,17 +31,26 @@ async function initializeSummarizerAPI() {
         : null
     },
     promptAPI: (() => {
-      const hasGlobal = 'LanguageModel' in self;
-      const hasNamespaced = !hasGlobal && 'ai' in self && 'languageModel' in self.ai;
-      const isAvailable = hasGlobal || hasNamespaced;
-      const api = hasGlobal ? self.LanguageModel : (hasNamespaced ? self.ai.languageModel : null);
+      let promptAvailable = false;
+      let PromptAPI = null;
+
+      if ('LanguageModel' in self) {
+        promptAvailable = true;
+        PromptAPI = self.LanguageModel;
+      } else if ('ai' in self && 'languageModel' in self.ai) {
+        promptAvailable = true;
+        PromptAPI = self.ai.languageModel;
+      }
+
+      console.log('[Mollitiam] Prompt API detection:', { promptAvailable, hasGlobal: 'LanguageModel' in self, hasNamespaced: 'ai' in self && 'languageModel' in (self.ai || {}) });
+
       return {
-        available: isAvailable,
-        availability: isAvailable && api && api.availability
-          ? (options) => api.availability(options || {})
+        available: promptAvailable,
+        availability: promptAvailable
+          ? (options) => PromptAPI.availability(options || { expectedOutputs: [{ type: 'text', languages: ['en'] }] })
           : null,
-        create: isAvailable && api && api.create ? (options) => api.create(options) : null,
-        params: isAvailable && api && api.params ? () => api.params() : null
+        create: promptAvailable ? (options) => PromptAPI.create(options) : null,
+        params: promptAvailable && PromptAPI.params ? () => PromptAPI.params() : null
       };
     })()
   };
@@ -119,6 +128,16 @@ async function initAPIs() {
 }
 
 const apiInitializationPromise = initAPIs();
+
+// Helper: wait for API init with timeout (prevents hanging if availability check stalls)
+function waitForApiInit(timeoutMs = 15000) {
+  return Promise.race([
+    apiInitializationPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('API init timed out')), timeoutMs))
+  ]).catch(err => {
+    console.warn('[Mollitiam] waitForApiInit:', err.message);
+  });
+}
 
 // ========================================
 // SETTINGS MANAGEMENT
@@ -268,7 +287,7 @@ setInterval(() => {
 async function summarizeContent({ job, text, url }) {
   if (!job) throw new Error('Summarization job context missing');
   const signal = job.signal;
-  await apiInitializationPromise;
+  await waitForApiInit();
   if (settings.apiChoice === 'summarization') {
     return await useSummarizationAPI({ job, text, signal, url });
   } else {
@@ -1223,10 +1242,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'simplifyText') {
     (async () => {
       try {
-        await apiInitializationPromise;
+        await waitForApiInit();
+        console.log('[Mollitiam] simplifyText: API state -', { available: SummarizerAPI.promptAPI.available, status: SummarizerAPI.promptAPI.status, hasCreate: !!SummarizerAPI.promptAPI.create });
         
         if (!SummarizerAPI.promptAPI.available || !SummarizerAPI.promptAPI.create) {
-          sendResponse({ success: false, error: 'Prompt API not available in background' });
+          sendResponse({ success: false, error: 'Prompt API not available (status: ' + SummarizerAPI.promptAPI.status + ')' });
           return;
         }
 
@@ -1267,7 +1287,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'checkPromptAPI') {
     (async () => {
       try {
-        await apiInitializationPromise;
+        await waitForApiInit();
+        console.log('[Mollitiam] checkPromptAPI: promptAPI state -', { available: SummarizerAPI.promptAPI.available, status: SummarizerAPI.promptAPI.status });
         
         if (!SummarizerAPI.promptAPI.available) {
           sendResponse({ available: false, status: 'no_api' });
@@ -1276,12 +1297,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         if (SummarizerAPI.promptAPI.availability) {
           const avail = await SummarizerAPI.promptAPI.availability();
+          console.log('[Mollitiam] checkPromptAPI: availability result =', avail);
           sendResponse({ available: avail === 'readily' || avail === 'available', status: avail });
         } else {
           // If no availability check, assume available since the API object exists
           sendResponse({ available: true, status: 'readily' });
         }
       } catch (error) {
+        console.error('[Mollitiam] checkPromptAPI error:', error);
         sendResponse({ available: false, status: 'error', error: error.message });
       }
     })();
@@ -1350,7 +1373,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // --- API status ---
   if (message.type === 'GET_API_STATUS') {
-    apiInitializationPromise.finally(() => {
+    waitForApiInit().then(() => {
       sendResponse({
         summarizer: SummarizerAPI.summarizer.status,
         promptAPI: SummarizerAPI.promptAPI.status

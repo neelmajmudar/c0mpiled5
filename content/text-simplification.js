@@ -25,17 +25,38 @@ async function getReadingLevel() {
     });
 }
 
-// Check if Prompt API is available (asks background script)
+// Check if Prompt API is available (asks background script) with timeout
 async function checkAIAvailability() {
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'checkPromptAPI' }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.warn('[Mollitiam] Could not check AI availability:', chrome.runtime.lastError.message);
-                resolve({ available: false, status: 'error' });
-                return;
+        let resolved = false;
+        const timeout = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                console.warn('[Mollitiam] checkPromptAPI timed out after 10s');
+                resolve({ available: false, status: 'timeout' });
             }
-            resolve(response || { available: false, status: 'unknown' });
-        });
+        }, 10000);
+        try {
+            chrome.runtime.sendMessage({ action: 'checkPromptAPI' }, (response) => {
+                if (resolved) return;
+                resolved = true;
+                clearTimeout(timeout);
+                if (chrome.runtime.lastError) {
+                    console.warn('[Mollitiam] Could not check AI availability:', chrome.runtime.lastError.message);
+                    resolve({ available: false, status: 'error', detail: chrome.runtime.lastError.message });
+                    return;
+                }
+                console.log('[Mollitiam] checkPromptAPI response:', response);
+                resolve(response || { available: false, status: 'unknown' });
+            });
+        } catch (e) {
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                console.error('[Mollitiam] checkPromptAPI exception:', e);
+                resolve({ available: false, status: 'error', detail: e.message });
+            }
+        }
     });
 }
 
@@ -54,22 +75,40 @@ async function loadSystemPrompts() {
     });
 }
 
-// Send text to background for AI simplification
+// Send text to background for AI simplification with timeout
 async function simplifyTextViaBackground(text, sysPrompt) {
     return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-            action: 'simplifyText',
-            text: text,
-            systemPrompt: sysPrompt
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-            } else if (response && response.success) {
-                resolve(response.simplifiedText);
-            } else {
-                reject(new Error(response ? response.error : 'No response from background'));
+        let settled = false;
+        const timeout = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                reject(new Error('simplifyText timed out after 60s'));
             }
-        });
+        }, 60000);
+        try {
+            chrome.runtime.sendMessage({
+                action: 'simplifyText',
+                text: text,
+                systemPrompt: sysPrompt
+            }, (response) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (response && response.success) {
+                    resolve(response.simplifiedText);
+                } else {
+                    reject(new Error(response ? response.error : 'No response from background'));
+                }
+            });
+        } catch (e) {
+            if (!settled) {
+                settled = true;
+                clearTimeout(timeout);
+                reject(e);
+            }
+        }
     });
 }
 
@@ -94,17 +133,22 @@ async function loadCurrentSystemPrompt() {
 async function ensureInitialized() {
     if (aiAvailable === true && systemPrompt) return;
     
+    console.log('[Mollitiam] ensureInitialized: checking AI availability...');
     const status = await checkAIAvailability();
-    console.log('[Mollitiam] AI availability check:', status);
+    console.log('[Mollitiam] AI availability result:', JSON.stringify(status));
     aiAvailable = status.available || status.status === 'after-download';
     
     if (aiAvailable) {
         try {
             systemPrompt = await loadCurrentSystemPrompt();
-            console.log('[Mollitiam] System prompt loaded, AI ready');
+            console.log('[Mollitiam] System prompt loaded successfully, AI ready');
         } catch (e) {
             console.warn('[Mollitiam] Failed to load system prompt:', e.message);
+            // Reset aiAvailable if we can't get the prompt
+            systemPrompt = null;
         }
+    } else {
+        console.warn('[Mollitiam] AI not available. Status:', status.status, 'Detail:', status.detail || 'none');
     }
 }
 
@@ -127,13 +171,17 @@ async function simplifyPageContent() {
         await ensureInitialized();
         
         if (!aiAvailable || !systemPrompt) {
+            console.error('[Mollitiam] AI check failed. aiAvailable:', aiAvailable, 'systemPrompt:', !!systemPrompt);
             const status = await checkAIAvailability();
+            console.error('[Mollitiam] Second AI check result:', JSON.stringify(status));
             if (status.status === 'after-download') {
                 showToast('<strong>Mollitiam:</strong> Gemini Nano model is still downloading.<br>Go to <code style="background:rgba(255,255,255,0.2);padding:1px 4px;border-radius:3px;">chrome://components</code> &rarr; Check for update. Try again in a few minutes.', '#0F766E');
             } else if (status.status === 'no_api') {
                 showToast('<strong>Mollitiam:</strong> Chrome AI not available.<br>Enable <code style="background:rgba(255,255,255,0.2);padding:1px 4px;border-radius:3px;">chrome://flags/#prompt-api-for-gemini-nano</code> and relaunch Chrome.', '#134E4A');
+            } else if (status.status === 'timeout') {
+                showToast('<strong>Mollitiam:</strong> Background script timed out. Try reloading the extension at <code style="background:rgba(255,255,255,0.2);padding:1px 4px;border-radius:3px;">chrome://extensions</code>.', '#134E4A');
             } else {
-                showToast('<strong>Mollitiam:</strong> AI initialization failed. Please reload the page and try again.', '#134E4A');
+                showToast('<strong>Mollitiam:</strong> AI not ready (status: ' + (status.status || 'unknown') + '). Reload page and try again.', '#134E4A');
             }
             isSimplifying = false;
             return { success: false, error: 'AI not available: ' + (status.status || 'unknown') };

@@ -9,8 +9,12 @@ gaze/human/human.esm.js
 lib/Readability.js
 lib/marked.js
 
-# Fonts (large binary files)
-fonts/
+# Fonts (large binary files, keep README)
+fonts/*.otf
+fonts/*.woff
+fonts/*.woff2
+fonts/*.eot
+fonts/*.ttf
 
 # OS files
 .DS_Store

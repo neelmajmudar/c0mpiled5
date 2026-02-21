@@ -240,9 +240,24 @@ function setupEventListeners() {
       elements.simplifyBtn.textContent = 'Simplifying...';
       
       try {
-        await chrome.runtime.sendMessage({ action: 'simplifyActiveTab' });
+        const response = await chrome.runtime.sendMessage({ action: 'simplifyActiveTab' });
+        console.log('[Mollitiam] Simplify response:', response);
+        if (response && response.success === false) {
+          elements.simplifyBtn.textContent = response.error || 'Failed';
+          setTimeout(() => {
+            elements.simplifyBtn.disabled = false;
+            elements.simplifyBtn.textContent = 'Simplify Page Text';
+          }, 3000);
+          return;
+        }
       } catch (e) {
         console.error('[Mollitiam] Simplify failed:', e);
+        elements.simplifyBtn.textContent = 'Error - Try Again';
+        setTimeout(() => {
+          elements.simplifyBtn.disabled = false;
+          elements.simplifyBtn.textContent = 'Simplify Page Text';
+        }, 3000);
+        return;
       }
       
       setTimeout(() => {
@@ -452,7 +467,9 @@ function applySpacing() {
 }
 
 function relayToActiveTab(payload) {
-  chrome.runtime.sendMessage({ action: 'relayToActiveTab', payload }).catch(() => {});
+  chrome.runtime.sendMessage({ action: 'relayToActiveTab', payload }).catch((e) => {
+    console.error('[Mollitiam] relayToActiveTab failed:', e, 'payload:', payload);
+  });
 }
 
 // ============ Gaze Status ============

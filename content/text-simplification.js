@@ -139,7 +139,7 @@ async function simplifyPageContent() {
             return { success: false, error: 'AI not available: ' + (status.status || 'unknown') };
         }
 
-        const mainContent = document.querySelector([
+        let mainContent = document.querySelector([
             'main', 'article', '.content', '.post', '#content', '#main',
             'div[role="main"]', '.article-content', '.article-body',
             '.story-body', '.article-text', '.story-content',
@@ -147,8 +147,14 @@ async function simplifyPageContent() {
             '.str-story-body', '.str-article-content', '#story-body'
         ].join(', '));
 
+        // Fallback to body if no specific content container found
         if (!mainContent) {
-            console.error('[Mollitiam] Could not find main content element');
+            console.warn('[Mollitiam] No specific content container found, falling back to body');
+            mainContent = document.body;
+        }
+
+        if (!mainContent) {
+            console.error('[Mollitiam] Could not find any content element');
             isSimplifying = false;
             return { success: false, error: 'No content found' };
         }

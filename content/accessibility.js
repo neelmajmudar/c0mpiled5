@@ -27,7 +27,9 @@ function toggleOpenDyslexicFont(enabled) {
             fontFaceStyle.textContent = `
                 @font-face {
                     font-family: 'OpenDyslexic';
-                    src: url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.otf')}') format('opentype');
+                    src: url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.woff2')}') format('woff2'),
+                         url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.woff')}') format('woff'),
+                         url('${chrome.runtime.getURL('fonts/OpenDyslexic-Regular.otf')}') format('opentype');
                     font-weight: normal;
                     font-style: normal;
                     font-display: swap;

@@ -30,14 +30,20 @@ async function initializeSummarizerAPI() {
         ? (options) => ('Summarizer' in self ? Summarizer.create(options) : ai.summarizer.create(options))
         : null
     },
-    promptAPI: {
-      available: 'LanguageModel' in self,
-      availability: 'LanguageModel' in self
-        ? (options) => LanguageModel.availability(options || { expectedOutputs: [{ type: 'text', languages: ['en'] }] })
-        : null,
-      create: 'LanguageModel' in self ? (options) => LanguageModel.create(options) : null,
-      params: 'LanguageModel' in self ? () => LanguageModel.params() : null
-    }
+    promptAPI: (() => {
+      const hasGlobal = 'LanguageModel' in self;
+      const hasNamespaced = !hasGlobal && 'ai' in self && 'languageModel' in self.ai;
+      const isAvailable = hasGlobal || hasNamespaced;
+      const api = hasGlobal ? self.LanguageModel : (hasNamespaced ? self.ai.languageModel : null);
+      return {
+        available: isAvailable,
+        availability: isAvailable && api && api.availability
+          ? (options) => api.availability(options || {})
+          : null,
+        create: isAvailable && api && api.create ? (options) => api.create(options) : null,
+        params: isAvailable && api && api.params ? () => api.params() : null
+      };
+    })()
   };
 }
 
@@ -73,7 +79,11 @@ async function initAPIs() {
 
     console.log('[Mollitiam] APIs initialized:', {
       summarizerAvailable: SummarizerAPI.summarizer.available,
-      promptAvailable: SummarizerAPI.promptAPI.available
+      promptAvailable: SummarizerAPI.promptAPI.available,
+      hasGlobalLanguageModel: 'LanguageModel' in self,
+      hasAiNamespace: 'ai' in self,
+      hasAiLanguageModel: 'ai' in self && 'languageModel' in self.ai,
+      hasGlobalSummarizer: 'Summarizer' in self
     });
 
     if (SummarizerAPI.summarizer.available && SummarizerAPI.summarizer.availability) {

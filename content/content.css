@@ -1,0 +1,117 @@
+/* Loader spinner */
+.loader {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #E0E0E0;
+    border-top: 2px solid #0D9488;
+    border-radius: 50%;
+    animation: mollitiam-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+@keyframes mollitiam-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Simplified text */
+.simplified-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    color: #2c3e50;
+    padding: 4px 0;
+    margin: 8px 0;
+}
+
+.simplified-text h1,
+.simplified-text h2,
+.simplified-text h3,
+.simplified-text h4 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #1a202c;
+}
+
+.simplified-text p {
+    margin: 8px 0;
+}
+
+.simplified-text ul,
+.simplified-text ol {
+    padding-left: 24px;
+    margin: 8px 0;
+}
+
+.simplified-text li {
+    margin: 4px 0;
+}
+
+.simplified-text code {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.simplified-text blockquote {
+    border-left: 4px solid #0D9488;
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #F0FDFA;
+    color: #374151;
+}
+
+.simplified-text pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.9em;
+}
+
+/* Original text tooltip */
+.original-text-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px;
+    max-width: 400px;
+    font-size: 13px;
+    line-height: 1.4;
+    z-index: 10000;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Mollitiam summary tooltip styles */
+#mollitiam-summary-tooltip .ai-summary-content {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#mollitiam-summary-tooltip .ai-summary-content h2,
+#mollitiam-summary-tooltip .ai-summary-content h3,
+#mollitiam-summary-tooltip .ai-summary-content h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 8px 0 4px;
+    color: #134E4A;
+}
+
+#mollitiam-summary-tooltip .ai-summary-content ul {
+    padding-left: 16px;
+    margin: 4px 0;
+}
+
+#mollitiam-summary-tooltip .ai-summary-content li {
+    margin: 2px 0;
+}
+
+#mollitiam-summary-tooltip .ai-summary-content strong {
+    color: #0D9488;
+}

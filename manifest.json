@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "Mollitiam",
+  "version": "1.0",
+  "description": "Accessibility, AI summarization, and hands-free browsing — all in one",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["sidePanel", "storage", "tabs", "scripting", "activeTab", "webNavigation"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "lib/Readability.js",
+        "lib/marked.js",
+        "config/config.js",
+        "config/themes.js",
+        "utils/markdown-formatter.js",
+        "content/accessibility.js",
+        "content/text-simplification.js",
+        "content/link-summarization.js",
+        "content/content-main.js"
+      ],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["youtube/youtube-content-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "gaze/gaze-core.js",
+        "gaze/head-cal.js",
+        "gaze/mouth-cal.js",
+        "gaze/gaze-dwell.js",
+        "gaze/gaze-overlay.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": {
+    "default_title": "Open Mollitiam",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lib/Readability.js",
+        "youtube/youtube-inject-page.js",
+        "youtube/youtube-caption-handler.js",
+        "twitter/twitter-interceptor.js",
+        "fonts/*",
+        "config/config.js"
+      ],
+      "matches": ["<all_urls>"]
+    },
+    {
+      "resources": [
+        "gaze/gaze-overlay.css",
+        "gaze/human/human.esm.js",
+        "gaze/human/models/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

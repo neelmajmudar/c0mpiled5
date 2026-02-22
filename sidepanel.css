@@ -71,8 +71,8 @@ body {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  filter: brightness(0) invert(1);
-  opacity: 0.95;
+  border-radius: 8px;
+  opacity: 0.97;
 }
 
 .mollitiam-title {
